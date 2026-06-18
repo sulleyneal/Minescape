@@ -2,13 +2,14 @@
 // RuneScape-style action tick, and broadcasts world/skill changes.
 
 import { WebSocket } from "ws";
-import { BlockType, BLOCKS, isSolid } from "../shared/blocks";
+import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
 import { GATHER_NODES, nodeForBlock, recipeById } from "../shared/gathering";
 import { ITEMS } from "../shared/items";
 import { ClientMessage, ServerMessage, Vec3 } from "../shared/protocol";
 import { emptySkills, levelForXp, SkillId, Skills } from "../shared/skills";
 import { addItem, emptyInventory, hasSpaceFor, Inventory, removeItem } from "./inventory";
+import { findSpawn } from "./spawn";
 import { World } from "./world";
 
 interface Player {
@@ -83,13 +84,7 @@ export class GameServer {
   }
 
   private findSpawn(): Vec3 {
-    // Drop the player onto the highest solid block near the world origin.
-    for (let y = 63; y > 0; y--) {
-      if (isSolid(this.world.getBlock(0, y, 0))) {
-        return { x: 0.5, y: y + 2, z: 0.5 };
-      }
-    }
-    return { x: 0.5, y: 40, z: 0.5 };
+    return findSpawn(this.world);
   }
 
   private send(player: Player, msg: ServerMessage): void {

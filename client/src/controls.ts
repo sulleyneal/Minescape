@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { isSolid } from "../../shared/blocks";
+import { WORLD_HEIGHT } from "../../shared/constants";
 import { ClientWorld } from "./world";
 
 const PLAYER_HALF = 0.3; // half width/depth
@@ -172,9 +173,24 @@ export class Controls {
       this.vel.y = 0;
     }
 
-    // Keep the camera at eye height and apply look orientation.
+    this.placeCamera();
+  }
+
+  /** Position the camera from the current pose without running physics — used
+   *  while the spawn chunk is still streaming in. */
+  placeCamera(): void {
     this.camera.position.set(this.pos.x, this.pos.y + EYE_HEIGHT, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
+  }
+
+  /** If the player happens to be embedded in solid blocks (e.g. terrain loaded
+   *  underneath them), lift them straight up until they're clear. */
+  ensureNotStuck(): void {
+    let guard = 0;
+    while (this.collides(this.pos.x, this.pos.y, this.pos.z) && this.pos.y < WORLD_HEIGHT && guard++ < WORLD_HEIGHT) {
+      this.pos.y += 1;
+    }
+    this.vel.set(0, 0, 0);
   }
 
   /** DDA voxel raycast from the eye along the view direction. */

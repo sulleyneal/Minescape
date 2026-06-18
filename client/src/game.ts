@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import { BlockType } from "../../shared/blocks";
+import { CHUNK_SIZE } from "../../shared/constants";
 import { ITEMS } from "../../shared/items";
 import { ServerMessage } from "../../shared/protocol";
 import { Controls, RaycastHit } from "./controls";
@@ -19,6 +20,8 @@ export class Game {
   private hud: Hud;
   private net = new Net();
   private myId = "";
+  /** True once the spawn chunk has loaded and physics has been enabled. */
+  private spawned = false;
   private lastMoveSent = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
@@ -112,8 +115,20 @@ export class Game {
     requestAnimationFrame(this.loop);
     const dt = Math.min(this.clock.getDelta(), 0.05);
 
-    this.controls.update(dt);
-    this.renderer.setHighlight(this.controls.raycast());
+    // Don't run physics until the chunk we're standing in has loaded — otherwise
+    // gravity drops us through a still-empty world and we get buried when it pops in.
+    const cx = Math.floor(this.controls.pos.x / CHUNK_SIZE);
+    const cz = Math.floor(this.controls.pos.z / CHUNK_SIZE);
+    if (this.world.hasChunk(cx, cz)) {
+      if (!this.spawned) {
+        this.spawned = true;
+        this.controls.ensureNotStuck();
+      }
+      this.controls.update(dt);
+    } else {
+      this.controls.placeCamera();
+    }
+    this.renderer.setHighlight(this.spawned ? this.controls.raycast() : null);
     this.renderer.syncChunks();
     this.renderer.render();
 
