@@ -5,10 +5,10 @@ import { WebSocket } from "ws";
 import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
 import { GATHER_NODES, nodeForBlock, recipeById } from "../shared/gathering";
-import { ITEMS } from "../shared/items";
+import { bestTool, ITEMS } from "../shared/items";
 import { ClientMessage, ServerMessage, Vec3 } from "../shared/protocol";
 import { emptySkills, levelForXp, SkillId, Skills } from "../shared/skills";
-import { addItem, emptyInventory, hasSpaceFor, Inventory, removeItem } from "./inventory";
+import { addItem, hasSpaceFor, Inventory, removeItem, startingInventory } from "./inventory";
 import { findSpawn } from "./spawn";
 import { World } from "./world";
 
@@ -59,7 +59,7 @@ export class GameServer {
       socket,
       pos: this.findSpawn(),
       yaw: 0,
-      inventory: emptyInventory(),
+      inventory: startingInventory(),
       skills: emptySkills(),
       sentChunks: new Set(),
       gathering: null,
@@ -172,7 +172,14 @@ export class GameServer {
         this.onGather(player, x, y, z);
         return;
       }
-      const drop = BLOCKS[current].drops;
+      // Enforce tool requirement (e.g. stone/crystal need a pickaxe). The
+      // client also gates this, but the server stays authoritative.
+      const def = BLOCKS[current];
+      if (def.requiresTool && !bestTool(player.inventory, def.tool)) {
+        this.send(player, { t: "notice", text: `You need a ${def.tool} to break ${def.name}.` });
+        return;
+      }
+      const drop = def.drops;
       if (drop && hasSpaceFor(player.inventory, drop)) {
         addItem(player.inventory, drop, 1);
         this.send(player, { t: "inventory", inventory: player.inventory });
@@ -200,6 +207,12 @@ export class GameServer {
     const level = levelForXp(player.skills[node.skill]);
     if (level < node.levelReq) {
       this.send(player, { t: "notice", text: `You need ${node.skill} level ${node.levelReq} for that.` });
+      player.gathering = null;
+      return;
+    }
+    // Trees need a hatchet, ore needs a pickaxe — just like RuneScape.
+    if (node.tool !== "hand" && !bestTool(player.inventory, node.tool)) {
+      this.send(player, { t: "notice", text: `You need a ${node.tool} to gather that.` });
       player.gathering = null;
       return;
     }
@@ -262,7 +275,10 @@ export class GameServer {
         continue;
       }
       const level = levelForXp(player.skills[node.skill]);
-      const chance = Math.min(0.95, node.baseChance + (level - node.levelReq) * 0.01);
+      // Better tools speed up gathering, just like a rune vs bronze pickaxe.
+      const tool = node.tool === "hand" ? null : bestTool(player.inventory, node.tool);
+      const toolBonus = tool ? (tool.tier - 1) * 0.12 : 0;
+      const chance = Math.min(0.95, node.baseChance + (level - node.levelReq) * 0.01 + toolBonus);
       if (Math.random() < chance) {
         addItem(player.inventory, node.yields, 1);
         this.send(player, { t: "inventory", inventory: player.inventory });

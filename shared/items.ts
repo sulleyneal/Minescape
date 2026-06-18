@@ -1,7 +1,9 @@
 // Item catalogue. Items live in the player inventory and are produced by
-// gathering skills, breaking blocks, or processing (e.g. cooking).
+// gathering skills, breaking blocks, or crafting. Tools carry stats used by the
+// break-time maths (see tools.ts).
 
 import { BlockType } from "./blocks";
+import { ToolStats, ToolType } from "./tools";
 
 export interface ItemDef {
   id: string;
@@ -11,9 +13,12 @@ export interface ItemDef {
   stackable: boolean;
   /** Hex color for the inventory icon swatch. */
   color: string;
+  /** Present on tools; drives what they can break and how fast. */
+  tool?: ToolStats;
 }
 
 export const ITEMS: Record<string, ItemDef> = {
+  // Materials / drops
   dirt: { id: "dirt", name: "Dirt", placeBlock: BlockType.Dirt, stackable: true, color: "#735234" },
   stone: { id: "stone", name: "Stone", placeBlock: BlockType.Stone, stackable: true, color: "#808085" },
   sand: { id: "sand", name: "Sand", placeBlock: BlockType.Sand, stackable: true, color: "#d4c287" },
@@ -23,8 +28,19 @@ export const ITEMS: Record<string, ItemDef> = {
   coal: { id: "coal", name: "Coal", stackable: true, color: "#3a3a40" },
   iron_ore: { id: "iron_ore", name: "Iron Ore", stackable: true, color: "#a67f6b" },
   gold_ore: { id: "gold_ore", name: "Gold Ore", stackable: true, color: "#c7a847" },
+  rune_shard: { id: "rune_shard", name: "Rune Shard", stackable: true, color: "#7b6cff" },
+  crystal: { id: "crystal", name: "Aether Crystal", placeBlock: BlockType.Crystal, stackable: true, color: "#8fdcef" },
   raw_fish: { id: "raw_fish", name: "Raw Fish", stackable: true, color: "#6fa3b5" },
   cooked_fish: { id: "cooked_fish", name: "Cooked Fish", stackable: true, color: "#c98a4b" },
+
+  // Tools (tier 1 Bronze, 2 Iron, 3 Crystal)
+  bronze_pickaxe: { id: "bronze_pickaxe", name: "Bronze Pickaxe", stackable: false, color: "#9a7b4f", tool: { type: "pickaxe", tier: 1 } },
+  bronze_axe: { id: "bronze_axe", name: "Bronze Hatchet", stackable: false, color: "#9a7b4f", tool: { type: "axe", tier: 1 } },
+  bronze_shovel: { id: "bronze_shovel", name: "Bronze Shovel", stackable: false, color: "#9a7b4f", tool: { type: "shovel", tier: 1 } },
+  iron_pickaxe: { id: "iron_pickaxe", name: "Iron Pickaxe", stackable: false, color: "#c8c8d0", tool: { type: "pickaxe", tier: 2 } },
+  iron_axe: { id: "iron_axe", name: "Iron Hatchet", stackable: false, color: "#c8c8d0", tool: { type: "axe", tier: 2 } },
+  crystal_pickaxe: { id: "crystal_pickaxe", name: "Aether Pickaxe", stackable: false, color: "#8fdcef", tool: { type: "pickaxe", tier: 3 } },
+  crystal_axe: { id: "crystal_axe", name: "Aether Hatchet", stackable: false, color: "#8fdcef", tool: { type: "axe", tier: 3 } },
 };
 
 export interface ItemStack {
@@ -33,3 +49,14 @@ export interface ItemStack {
 }
 
 export const INVENTORY_SLOTS = 28; // RuneScape's iconic 28-slot backpack.
+
+/** Best (highest-tier) tool of a given type held in an inventory, or null. */
+export function bestTool(inventory: (ItemStack | null)[], type: ToolType): ToolStats | null {
+  let best: ToolStats | null = null;
+  for (const slot of inventory) {
+    if (!slot) continue;
+    const t = ITEMS[slot.item]?.tool;
+    if (t && t.type === type && (!best || t.tier > best.tier)) best = t;
+  }
+  return best;
+}

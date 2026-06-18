@@ -5,7 +5,8 @@ import * as THREE from "three";
 import { ClientWorld } from "./world";
 import { buildChunkMeshes, ChunkMeshes } from "./chunkMesher";
 
-const SKY = 0x8fc7ff;
+// A soft twilight palette for a more mystical mood than plain daylight.
+const SKY = 0x9fb0e0;
 
 export class Renderer {
   readonly scene = new THREE.Scene();
@@ -21,7 +22,14 @@ export class Renderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     this.scene.background = new THREE.Color(SKY);
-    this.scene.fog = new THREE.Fog(SKY, 60, 140);
+    this.scene.fog = new THREE.Fog(SKY, 48, 150);
+
+    // Lighting: sky/ground hemisphere + a warm sun + gentle violet ambient.
+    this.scene.add(new THREE.HemisphereLight(0xbfd0ff, 0x4a4030, 0.6));
+    this.scene.add(new THREE.AmbientLight(0x9b8fc6, 0.35));
+    const sun = new THREE.DirectionalLight(0xfff0d0, 0.75);
+    sun.position.set(0.5, 1, 0.3);
+    this.scene.add(sun);
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -48,6 +56,7 @@ export class Renderer {
       this.disposeChunk(k);
       const meshes = buildChunkMeshes(this.world, cx, cz);
       if (meshes.opaque) this.scene.add(meshes.opaque);
+      if (meshes.glow) this.scene.add(meshes.glow);
       if (meshes.transparent) this.scene.add(meshes.transparent);
       this.chunkMeshes.set(k, meshes);
     }
@@ -57,7 +66,7 @@ export class Renderer {
   private disposeChunk(key: string): void {
     const existing = this.chunkMeshes.get(key);
     if (!existing) return;
-    for (const m of [existing.opaque, existing.transparent]) {
+    for (const m of [existing.opaque, existing.glow, existing.transparent]) {
       if (!m) continue;
       this.scene.remove(m);
       m.geometry.dispose();

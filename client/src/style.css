@@ -101,6 +101,27 @@ body {
   pointer-events: none;
 }
 
+#mine-bar {
+  position: fixed;
+  left: 50%;
+  top: calc(50% + 22px);
+  transform: translateX(-50%);
+  width: 90px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+  display: none;
+  pointer-events: none;
+}
+#mine-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ffd24a, #ff9a3c);
+}
+
 #panel-left {
   position: fixed;
   top: 12px;

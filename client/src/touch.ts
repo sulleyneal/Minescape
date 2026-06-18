@@ -37,8 +37,12 @@ export class TouchControls {
     this.bindJoystick(wrap.querySelector("#joystick")!, wrap.querySelector("#joy-knob")!);
     this.bindButton(wrap.querySelector("#btn-jump")!, () => this.controls.requestJump());
     this.bindButton(wrap.querySelector("#btn-build")!, () => this.controls.triggerSecondary());
-    // Mine repeats while held so chopping/mining several blocks is one press.
-    this.bindHoldButton(wrap.querySelector("#btn-mine")!, () => this.controls.triggerPrimary());
+    // Mine is held: the game loop accumulates break progress while pressed.
+    this.bindHeld(
+      wrap.querySelector("#btn-mine")!,
+      () => (this.controls.primaryHeld = true),
+      () => (this.controls.primaryHeld = false),
+    );
     this.bindButton(wrap.querySelector("#btn-craft")!, () => this.toggleCraft());
 
     // On touch, panels can't be dismissed with a key — tap to close them.
@@ -64,24 +68,16 @@ export class TouchControls {
     );
   }
 
-  private bindHoldButton(el: Element, action: () => void): void {
-    let timer: number | null = null;
+  private bindHeld(el: Element, onDown: () => void, onUp: () => void): void {
     const start = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
-      action();
-      timer = window.setInterval(action, 350);
-    };
-    const stop = () => {
-      if (timer !== null) {
-        clearInterval(timer);
-        timer = null;
-      }
+      onDown();
     };
     el.addEventListener("pointerdown", start, { passive: false } as AddEventListenerOptions);
-    el.addEventListener("pointerup", stop);
-    el.addEventListener("pointercancel", stop);
-    el.addEventListener("pointerleave", stop);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    el.addEventListener("pointerleave", onUp);
   }
 
   private bindJoystick(base: Element, knob: HTMLElement): void {

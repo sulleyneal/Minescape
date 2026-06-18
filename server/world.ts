@@ -93,11 +93,17 @@ export class World {
   }
 
   private oreAt(wx: number, y: number, wz: number): BlockType {
-    // Deeper rock biases toward more valuable ore, like real mining depth.
+    // Deeper rock biases toward more valuable ore and rarer mystical blocks.
     const n = fbm(this.seed + 31, wx / 8, (wz + y * 5) / 8, 3);
-    if (n > 0.86) return y < SEA_LEVEL - 8 ? BlockType.GoldOre : BlockType.IronOre;
+    const deep = y < SEA_LEVEL - 8;
+    // Mystical veins use a separate noise field so they cluster on their own.
+    const m = fbm(this.seed + 131, wx / 6, (wz + y * 3) / 6, 3);
+    if (deep && m > 0.9) return BlockType.Crystal; // glowing aether crystals, deep only
+    if (deep && m > 0.86) return BlockType.Runestone; // ancient runed stone
+    if (n > 0.86) return deep ? BlockType.GoldOre : BlockType.IronOre;
     if (n > 0.78) return BlockType.CoalOre;
     if (n > 0.74) return BlockType.IronOre;
+    if (m > 0.7 && m < 0.78) return BlockType.MossStone; // mossy stone pockets
     return BlockType.Stone;
   }
 

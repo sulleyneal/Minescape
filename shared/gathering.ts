@@ -5,6 +5,7 @@
 
 import { BlockType } from "./blocks";
 import { SkillId } from "./skills";
+import { ToolType } from "./tools";
 
 export interface GatherNode {
   /** Block you click to gather from. */
@@ -21,6 +22,8 @@ export interface GatherNode {
   respawnTicks: number;
   /** Base success chance per tick at the level requirement (0..1). */
   baseChance: number;
+  /** Tool needed to gather (axe to chop, pickaxe to mine; "hand" = none). */
+  tool: ToolType;
 }
 
 export const GATHER_NODES: GatherNode[] = [
@@ -33,6 +36,7 @@ export const GATHER_NODES: GatherNode[] = [
     depletedBlock: BlockType.Air,
     respawnTicks: 10,
     baseChance: 0.35,
+    tool: "axe",
   },
   {
     block: BlockType.CoalOre,
@@ -43,6 +47,7 @@ export const GATHER_NODES: GatherNode[] = [
     depletedBlock: BlockType.Stone,
     respawnTicks: 8,
     baseChance: 0.3,
+    tool: "pickaxe",
   },
   {
     block: BlockType.IronOre,
@@ -53,6 +58,7 @@ export const GATHER_NODES: GatherNode[] = [
     depletedBlock: BlockType.Stone,
     respawnTicks: 8,
     baseChance: 0.4,
+    tool: "pickaxe",
   },
   {
     block: BlockType.GoldOre,
@@ -63,6 +69,7 @@ export const GATHER_NODES: GatherNode[] = [
     depletedBlock: BlockType.Stone,
     respawnTicks: 12,
     baseChance: 0.25,
+    tool: "pickaxe",
   },
   {
     block: BlockType.Water,
@@ -73,6 +80,7 @@ export const GATHER_NODES: GatherNode[] = [
     depletedBlock: BlockType.Water, // water never depletes
     respawnTicks: 0,
     baseChance: 0.3,
+    tool: "hand",
   },
 ];
 
@@ -108,6 +116,31 @@ export const RECIPES: Recipe[] = [
     skill: SkillId.Cooking,
     levelReq: 1,
     xp: 30,
+  },
+  // Tool progression: smelt ore into better tools, then attune with crystals.
+  {
+    id: "iron_pickaxe",
+    name: "Forge Iron Pickaxe",
+    inputs: [{ item: "iron_ore", count: 2 }, { item: "plank", count: 1 }],
+    output: { item: "iron_pickaxe", count: 1 },
+  },
+  {
+    id: "iron_axe",
+    name: "Forge Iron Hatchet",
+    inputs: [{ item: "iron_ore", count: 2 }, { item: "plank", count: 1 }],
+    output: { item: "iron_axe", count: 1 },
+  },
+  {
+    id: "crystal_pickaxe",
+    name: "Attune Aether Pickaxe",
+    inputs: [{ item: "crystal", count: 2 }, { item: "iron_pickaxe", count: 1 }],
+    output: { item: "crystal_pickaxe", count: 1 },
+  },
+  {
+    id: "crystal_axe",
+    name: "Attune Aether Hatchet",
+    inputs: [{ item: "crystal", count: 2 }, { item: "iron_axe", count: 1 }],
+    output: { item: "crystal_axe", count: 1 },
   },
 ];
 

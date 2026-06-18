@@ -37,6 +37,8 @@ export class Controls {
   // Touch/virtual input, fed by the on-screen controls on mobile.
   touchForward = 0; // -1..1
   touchStrafe = 0; // -1..1
+  /** True while the mine/break action is held (mouse or touch). */
+  primaryHeld = false;
   private jumpQueued = false;
 
   onPrimary: ((hit: RaycastHit | null) => void) | null = null;
@@ -78,9 +80,13 @@ export class Controls {
     this.canvas.addEventListener("mousedown", (e) => {
       if (!this.locked) return;
       e.preventDefault();
-      const hit = this.raycast();
-      if (e.button === 0) this.onPrimary?.(hit);
-      else if (e.button === 2) this.onSecondary?.(hit);
+      // Left button is held to mine (resolved each frame by the game loop);
+      // right button places once.
+      if (e.button === 0) this.primaryHeld = true;
+      else if (e.button === 2) this.triggerSecondary();
+    });
+    document.addEventListener("mouseup", (e) => {
+      if (e.button === 0) this.primaryHeld = false;
     });
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }

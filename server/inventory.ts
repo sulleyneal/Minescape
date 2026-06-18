@@ -8,6 +8,15 @@ export function emptyInventory(): Inventory {
   return new Array(INVENTORY_SLOTS).fill(null);
 }
 
+/** New players start with a basic toolkit so every action works immediately. */
+export function startingInventory(): Inventory {
+  const inv = emptyInventory();
+  inv[0] = { item: "bronze_pickaxe", count: 1 };
+  inv[1] = { item: "bronze_axe", count: 1 };
+  inv[2] = { item: "bronze_shovel", count: 1 };
+  return inv;
+}
+
 /** Add count of an item; returns the amount that did NOT fit. */
 export function addItem(inv: Inventory, item: string, count: number): number {
   const def = ITEMS[item];

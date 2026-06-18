@@ -42,6 +42,18 @@ export class Hud {
     return document.activeElement === this.chatInputEl;
   }
 
+  /** Update the break-progress bar under the crosshair. 0 or <0 hides it. */
+  setMineProgress(p: number): void {
+    const bar = this.root.querySelector("#mine-bar") as HTMLElement | null;
+    if (!bar) return;
+    if (p <= 0) {
+      bar.style.display = "none";
+      return;
+    }
+    bar.style.display = "block";
+    (bar.firstElementChild as HTMLElement).style.width = `${Math.round(p * 100)}%`;
+  }
+
   private bindChat(): void {
     document.addEventListener("keydown", (e) => {
       if (e.code === "Enter") {
@@ -188,6 +200,7 @@ function escapeHtml(s: string): string {
 
 const TEMPLATE = `
   <div id="crosshair">+</div>
+  <div id="mine-bar"><i></i></div>
   <div id="panel-left">
     <div id="title">MINESCAPE</div>
     <div id="total-level">Total level: 6</div>
@@ -210,8 +223,10 @@ const TEMPLATE = `
     <ul>
       <li><b>Click</b> the world to lock the mouse and look around</li>
       <li><b>WASD</b> move, <b>Space</b> jump</li>
-      <li><b>Left click</b> a tree / ore / water to gather (train Woodcutting, Mining, Fishing)</li>
-      <li><b>Left click</b> dirt/stone/sand to mine it into your pack</li>
+      <li><b>Hold left click</b> to mine — harder blocks take longer; the bar under the crosshair shows progress</li>
+      <li>Tools matter: <b>hatchet</b> for trees/wood, <b>pickaxe</b> for stone &amp; ore, <b>shovel</b> for dirt/sand. You start with bronze ones</li>
+      <li>Hold left click on a tree / ore / water to gather (Woodcutting, Mining, Fishing)</li>
+      <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge iron &amp; attune crystal tools in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>
       <li><b>C</b> crafting · <b>Enter</b> chat · <b>H</b> help</li>
       <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft. Tap a panel to close it.</li>

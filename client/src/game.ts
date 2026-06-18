@@ -2,10 +2,12 @@
 // HUD, routes server messages into state, and runs the render/update loop.
 
 import * as THREE from "three";
-import { BlockType } from "../../shared/blocks";
+import { BlockType, BLOCKS } from "../../shared/blocks";
 import { CHUNK_SIZE } from "../../shared/constants";
-import { ITEMS } from "../../shared/items";
+import { nodeForBlock } from "../../shared/gathering";
+import { bestTool, ITEMS, ItemStack } from "../../shared/items";
 import { ServerMessage } from "../../shared/protocol";
+import { breakTime } from "../../shared/tools";
 import { Controls, RaycastHit } from "./controls";
 import { Hud } from "./hud";
 import { Net } from "./net";
@@ -22,6 +24,11 @@ export class Game {
   private myId = "";
   /** True once the spawn chunk has loaded and physics has been enabled. */
   private spawned = false;
+  /** Local copy of the inventory, for tool lookups during mining. */
+  private inventory: (ItemStack | null)[] = [];
+  private mineKey = "";
+  private mineProgress = 0;
+  private gatherKey = "";
   private lastMoveSent = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
@@ -31,7 +38,6 @@ export class Game {
     this.hud = new Hud(hudRoot, (m) => this.net.send(m));
     this.controls = new Controls(canvas, this.renderer.camera, this.world, () => this.hud.isTyping());
 
-    this.controls.onPrimary = (hit) => this.onPrimary(hit);
     this.controls.onSecondary = (hit) => this.onSecondary(hit);
 
     // Phones/tablets get on-screen joystick + action buttons.
@@ -45,10 +51,67 @@ export class Game {
     this.loop();
   }
 
-  private onPrimary(hit: RaycastHit | null): void {
-    if (!hit) return;
-    // Server decides whether this is a gather (tree/ore/water) or a plain break.
-    this.net.send({ t: "blockEdit", x: hit.x, y: hit.y, z: hit.z, block: BlockType.Air });
+  // Resolve the held mine/break action. Terrain blocks accumulate break
+  // progress (scaled by hardness and the best matching tool); tree/ore/water
+  // delegate to the server's gathering tick.
+  private updateMining(dt: number): void {
+    if (!this.controls.primaryHeld) {
+      this.resetMining();
+      return;
+    }
+    const hit = this.controls.raycast();
+    if (!hit) {
+      this.resetMining();
+      return;
+    }
+    const block = this.world.getBlock(hit.x, hit.y, hit.z);
+    const key = `${hit.x},${hit.y},${hit.z}`;
+
+    // Trees / ore / water: the server runs the RuneScape-style gather tick.
+    if (nodeForBlock(block) && block !== BlockType.Leaves) {
+      if (this.gatherKey !== key) {
+        this.gatherKey = key;
+        this.net.send({ t: "gather", x: hit.x, y: hit.y, z: hit.z });
+      }
+      this.hud.setMineProgress(-1); // server-driven; hide local bar
+      return;
+    }
+    this.gatherKey = "";
+
+    const def = BLOCKS[block];
+    if (def.hardness === 0 || block === BlockType.Air) {
+      this.resetMining();
+      return;
+    }
+    const tool = bestTool(this.inventory, def.tool);
+    const time = breakTime(def.hardness, def.tool, def.requiresTool, tool);
+    if (!isFinite(time)) {
+      if (this.mineKey !== key) {
+        this.mineKey = key;
+        this.hud.notice(def.requiresTool ? `You need a ${def.tool} to break ${def.name}.` : "You can't break that.");
+      }
+      this.hud.setMineProgress(0);
+      return;
+    }
+
+    if (this.mineKey !== key) {
+      this.mineKey = key;
+      this.mineProgress = 0;
+    }
+    this.mineProgress += dt / time;
+    this.hud.setMineProgress(Math.min(1, this.mineProgress));
+    if (this.mineProgress >= 1) {
+      this.net.send({ t: "blockEdit", x: hit.x, y: hit.y, z: hit.z, block: BlockType.Air });
+      this.mineProgress = 0;
+      this.mineKey = ""; // wait for the next target
+    }
+  }
+
+  private resetMining(): void {
+    this.mineKey = "";
+    this.gatherKey = "";
+    this.mineProgress = 0;
+    this.hud.setMineProgress(0);
   }
 
   private onSecondary(hit: RaycastHit | null): void {
@@ -75,6 +138,7 @@ export class Game {
       case "welcome":
         this.myId = m.id;
         this.controls.pos.set(m.spawn.x, m.spawn.y, m.spawn.z);
+        this.inventory = m.inventory;
         this.hud.setInventory(m.inventory);
         this.hud.setSkills(m.skills);
         for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw);
@@ -97,6 +161,7 @@ export class Game {
         this.renderer.removePlayer(m.id);
         break;
       case "inventory":
+        this.inventory = m.inventory;
         this.hud.setInventory(m.inventory);
         break;
       case "skill":
@@ -125,6 +190,7 @@ export class Game {
         this.controls.ensureNotStuck();
       }
       this.controls.update(dt);
+      this.updateMining(dt);
     } else {
       this.controls.placeCamera();
     }

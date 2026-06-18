@@ -12,13 +12,24 @@ no install required.
 
 *An isometric render of an actual generated world (run `npx tsx tools/render-preview.ts` to make your own).*
 
+![The procedural block textures](./texture-atlas.png)
+
+*Block textures are generated procedurally on a canvas at runtime — no image
+assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
+
 ## What's in this vertical slice
 
 **The Minecraft backbone**
-- Procedurally generated voxel world (seeded terrain, hills, lakes, trees, ore).
-- Streamed chunks rendered with face-culled meshing — no texture assets needed.
+- Procedurally generated voxel world (seeded terrain, hills, lakes, trees, ore,
+  plus mystical mossy stone, glowing runestone and deep Aether crystals).
+- Streamed chunks rendered with face-culled meshing, procedurally generated
+  textures (built on a canvas — still no image assets), scene lighting, and a
+  twilight "mystical" palette. Crystals and runes are self-lit.
 - First-person controller with gravity, jumping, and voxel collision.
-- Break and place blocks; every edit is synced to all players in real time.
+- **Tool-gated, timed mining:** hold to break; harder blocks take longer and
+  need the right tool (hatchet for wood, pickaxe for stone/ore, shovel for
+  dirt/sand). Tiers — Bronze → Iron → Aether (crystal) — break faster.
+- Place blocks; every edit is synced to all players in real time.
 
 **The RuneScape loop**
 - Skills with the **authentic RuneScape XP curve** (level 1–99).
