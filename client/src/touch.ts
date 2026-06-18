@@ -44,12 +44,7 @@ export class TouchControls {
       () => (this.controls.primaryHeld = false),
     );
     this.bindButton(wrap.querySelector("#btn-craft")!, () => this.toggleCraft());
-
-    // On touch, panels can't be dismissed with a key — tap to close them.
-    for (const sel of ["#help", "#craft"]) {
-      const panel = document.querySelector(sel);
-      panel?.addEventListener("click", () => panel.classList.add("hidden"));
-    }
+    // Panels are dismissed via their × buttons (wired in the HUD).
   }
 
   private toggleCraft(): void {

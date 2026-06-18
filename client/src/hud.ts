@@ -73,11 +73,36 @@ export class Hud {
   }
 
   private bindToggles(): void {
+    const help = this.root.querySelector("#help") as HTMLElement;
+
+    // Close buttons (× ) work on desktop and touch.
+    for (const btn of Array.from(this.root.querySelectorAll<HTMLElement>(".panel-close"))) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const target = this.root.querySelector(btn.dataset.close!);
+        target?.classList.add("hidden");
+      });
+    }
+    // Tapping the help text (no interactive parts) also closes it.
+    help.addEventListener("click", () => help.classList.add("hidden"));
+
     document.addEventListener("keydown", (e) => {
       if (this.isTyping()) return;
       if (e.code === "KeyC") this.craftEl.classList.toggle("hidden");
-      if (e.code === "KeyH") this.root.querySelector("#help")!.classList.toggle("hidden");
+      if (e.code === "KeyH") help.classList.toggle("hidden");
+      // Once the player starts moving, get the help out of the way.
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(e.code)) help.classList.add("hidden");
     });
+  }
+
+  private showTip(text: string): void {
+    const tip = this.root.querySelector("#item-tip") as HTMLElement;
+    tip.textContent = text;
+    tip.style.opacity = "1";
+  }
+
+  private hideTip(): void {
+    (this.root.querySelector("#item-tip") as HTMLElement).style.opacity = "0";
   }
 
   private buildCraftMenu(): void {
@@ -175,12 +200,22 @@ export class Hud {
         const def = ITEMS[stack.item];
         slot.style.background = def?.color ?? "#555";
         slot.title = def?.name ?? stack.item;
+        if (def?.icon) {
+          const icon = document.createElement("span");
+          icon.className = "icon";
+          icon.textContent = def.icon;
+          slot.appendChild(icon);
+        }
         if (stack.count > 1) {
           const count = document.createElement("span");
           count.className = "count";
           count.textContent = String(stack.count);
           slot.appendChild(count);
         }
+        // Show the item name on hover (works whenever the cursor is free).
+        const label = def?.name ?? stack.item;
+        slot.onmouseenter = () => this.showTip(label);
+        slot.onmouseleave = () => this.hideTip();
         const placeable = def?.placeBlock !== undefined;
         slot.onclick = () => {
           if (!placeable) return;
@@ -208,6 +243,7 @@ const TEMPLATE = `
   </div>
   <div id="notices"></div>
   <div id="bottom">
+    <div id="item-tip"></div>
     <div id="inventory"></div>
   </div>
   <div id="chat">
@@ -215,11 +251,13 @@ const TEMPLATE = `
     <input id="chat-input" maxlength="200" placeholder="Press Enter to chat..." />
   </div>
   <div id="craft" class="panel hidden">
+    <button class="panel-close" data-close="#craft">×</button>
     <h3>Crafting (C)</h3>
     <div id="craft-list"></div>
   </div>
-  <div id="help">
-    <h3>How to play (H to toggle)</h3>
+  <div id="help" class="panel">
+    <button class="panel-close" data-close="#help">×</button>
+    <h3>How to play</h3>
     <ul>
       <li><b>Click</b> the world to lock the mouse and look around</li>
       <li><b>WASD</b> move, <b>Space</b> jump</li>
@@ -229,7 +267,8 @@ const TEMPLATE = `
       <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge iron &amp; attune crystal tools in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>
       <li><b>C</b> crafting · <b>Enter</b> chat · <b>H</b> help</li>
-      <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft. Tap a panel to close it.</li>
+      <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft.</li>
+      <li style="color:#ffd24a"><b>Close this:</b> click ×, press <b>H</b>, or just start moving.</li>
     </ul>
   </div>
 `;

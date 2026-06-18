@@ -25,9 +25,10 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(SKY, 48, 150);
 
     // Lighting: sky/ground hemisphere + a warm sun + gentle violet ambient.
-    this.scene.add(new THREE.HemisphereLight(0xbfd0ff, 0x4a4030, 0.6));
-    this.scene.add(new THREE.AmbientLight(0x9b8fc6, 0.35));
-    const sun = new THREE.DirectionalLight(0xfff0d0, 0.75);
+    // Tuned so shaded sides/undersides stay readable rather than murky.
+    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x6a6070, 0.85));
+    this.scene.add(new THREE.AmbientLight(0xa99fce, 0.5));
+    const sun = new THREE.DirectionalLight(0xfff0d0, 0.7);
     sun.position.set(0.5, 1, 0.3);
     this.scene.add(sun);
 
