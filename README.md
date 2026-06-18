@@ -8,6 +8,10 @@ It runs entirely in the browser (TypeScript + [Three.js](https://threejs.org/))
 with a Node.js WebSocket game server — so friends join by opening a single URL,
 no install required.
 
+![Isometric preview of a generated Minescape world](./world-preview.png)
+
+*An isometric render of an actual generated world (run `npx tsx tools/render-preview.ts` to make your own).*
+
 ## What's in this vertical slice
 
 **The Minecraft backbone**
@@ -38,8 +42,28 @@ Then open **http://localhost:5173**. `npm run dev` starts both the WebSocket
 game server (port 8080) and the Vite client; Vite proxies `/ws` to the server,
 so everything is behind one URL.
 
-To let friends join, expose port 5173 (e.g. with a tunnel) and share the URL.
 Set a fixed world with `SEED=12345 npm run dev`.
+
+## Hosting it on a public URL (play from anywhere)
+
+For production the Node server serves the built client **and** the game
+WebSocket on a single origin, so one URL is all you need.
+
+```bash
+npm run build   # bundle the client into dist/
+npm start       # serve client + game on http://localhost:8080
+```
+
+**Deploy from your phone (no computer needed):** this repo includes a
+[`render.yaml`](./render.yaml) Blueprint. Go to [render.com](https://render.com),
+choose **New + → Blueprint**, pick this repository/branch, and Render builds and
+hands you a public `https` URL. The free plan supports WebSockets. A
+[`Dockerfile`](./Dockerfile) is also included for Fly.io / Railway / any VPS.
+
+> **Note on phones:** the controls use a keyboard (WASD) and mouse pointer-lock,
+> so the game is currently **playable on a computer**, not a touchscreen. Hosting
+> lets you open the world from a phone and share the link with friends on
+> laptops/desktops. On-screen touch controls are a planned next step.
 
 ## Controls
 

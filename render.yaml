@@ -1,0 +1,19 @@
+# Render.com Blueprint. Deploy from your phone:
+#   1. Push this repo to GitHub (already done on your branch).
+#   2. On render.com: New + > Blueprint, pick this repo/branch.
+#   3. Render reads this file, builds, and gives you a public https URL.
+# The free plan supports WebSockets and serves the client + game on one origin.
+services:
+  - type: web
+    name: minescape
+    runtime: node
+    plan: free
+    # --include=dev ensures Vite/TypeScript are available for the client build.
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Optional: pin a world seed so the map is the same every restart.
+      # - key: SEED
+      #   value: "12345"
