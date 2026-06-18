@@ -9,6 +9,7 @@ import { Controls, RaycastHit } from "./controls";
 import { Hud } from "./hud";
 import { Net } from "./net";
 import { Renderer } from "./renderer";
+import { isTouchDevice, TouchControls } from "./touch";
 import { ClientWorld } from "./world";
 
 export class Game {
@@ -29,6 +30,9 @@ export class Game {
 
     this.controls.onPrimary = (hit) => this.onPrimary(hit);
     this.controls.onSecondary = (hit) => this.onSecondary(hit);
+
+    // Phones/tablets get on-screen joystick + action buttons.
+    if (isTouchDevice()) new TouchControls(this.controls, canvas, hudRoot);
   }
 
   async start(): Promise<void> {

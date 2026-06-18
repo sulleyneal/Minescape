@@ -214,6 +214,7 @@ const TEMPLATE = `
       <li><b>Left click</b> dirt/stone/sand to mine it into your pack</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>
       <li><b>C</b> crafting · <b>Enter</b> chat · <b>H</b> help</li>
+      <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft. Tap a panel to close it.</li>
     </ul>
   </div>
 `;

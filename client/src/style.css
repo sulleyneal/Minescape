@@ -19,6 +19,12 @@ body {
   position: fixed;
   inset: 0;
   display: block;
+  touch-action: none; /* stop the browser from scrolling/zooming on drag */
+}
+
+html,
+body {
+  overscroll-behavior: none;
 }
 
 .hidden {
@@ -295,4 +301,65 @@ body {
 }
 #help b {
   color: #ffd24a;
+}
+
+/* ---- Touch controls (mobile only) ---- */
+#touch-ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none; /* children opt back in */
+  z-index: 30;
+}
+#joystick {
+  position: absolute;
+  left: 24px;
+  bottom: 90px;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(20, 16, 8, 0.35);
+  border: 2px solid rgba(255, 210, 74, 0.5);
+  pointer-events: auto;
+  touch-action: none;
+}
+#joy-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: rgba(255, 210, 74, 0.7);
+  border: 2px solid #5a4a2a;
+}
+#touch-buttons {
+  position: absolute;
+  right: 18px;
+  bottom: 80px;
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  gap: 12px;
+  pointer-events: none;
+}
+.tbtn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  font-size: 30px;
+  color: #2a1c00;
+  background: rgba(255, 210, 74, 0.85);
+  border: 2px solid #5a4a2a;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+.tbtn.mine {
+  background: rgba(123, 214, 107, 0.95);
+}
+.tbtn.build {
+  background: rgba(143, 199, 255, 0.9);
+}
+.tbtn:active {
+  filter: brightness(1.2);
 }

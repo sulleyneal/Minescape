@@ -33,6 +33,11 @@ export class Controls {
   private keys = new Set<string>();
   locked = false;
 
+  // Touch/virtual input, fed by the on-screen controls on mobile.
+  touchForward = 0; // -1..1
+  touchStrafe = 0; // -1..1
+  private jumpQueued = false;
+
   onPrimary: ((hit: RaycastHit | null) => void) | null = null;
   onSecondary: ((hit: RaycastHit | null) => void) | null = null;
 
@@ -45,9 +50,14 @@ export class Controls {
     this.bindEvents();
   }
 
+  private get coarsePointer(): boolean {
+    return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  }
+
   private bindEvents(): void {
     this.canvas.addEventListener("click", () => {
-      if (!this.locked) this.canvas.requestPointerLock();
+      // Pointer lock is desktop-only; on touch devices the on-screen controls drive looking.
+      if (!this.locked && !this.coarsePointer) this.canvas.requestPointerLock();
     });
     document.addEventListener("pointerlockchange", () => {
       this.locked = document.pointerLockElement === this.canvas;
@@ -74,6 +84,30 @@ export class Controls {
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
+  // ---- Virtual input API (used by on-screen touch controls) ----
+
+  /** Rotate the view by a touch-drag delta (pixels). */
+  applyLook(dx: number, dy: number): void {
+    this.yaw -= dx * 0.004;
+    this.pitch -= dy * 0.004;
+    const limit = Math.PI / 2 - 0.01;
+    this.pitch = Math.max(-limit, Math.min(limit, this.pitch));
+  }
+
+  requestJump(): void {
+    this.jumpQueued = true;
+  }
+
+  /** Fire the break/gather action at the current crosshair. */
+  triggerPrimary(): void {
+    this.onPrimary?.(this.raycast());
+  }
+
+  /** Fire the place action at the current crosshair. */
+  triggerSecondary(): void {
+    this.onSecondary?.(this.raycast());
+  }
+
   private collides(x: number, y: number, z: number): boolean {
     const minX = Math.floor(x - PLAYER_HALF);
     const maxX = Math.floor(x + PLAYER_HALF);
@@ -92,9 +126,14 @@ export class Controls {
   }
 
   update(dt: number): void {
-    // Desired horizontal movement relative to facing.
-    const forward = (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
-    const strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
+    // Desired horizontal movement relative to facing. Keyboard takes priority;
+    // the virtual joystick fills in when no movement key is held.
+    let forward = (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
+    let strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
+    if (forward === 0 && strafe === 0) {
+      forward = this.touchForward;
+      strafe = this.touchStrafe;
+    }
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     // forward is -Z in three.js camera space
@@ -109,10 +148,11 @@ export class Controls {
     this.vel.z = dz;
 
     this.vel.y -= GRAVITY * dt;
-    if (this.keys.has("Space") && this.onGround) {
+    if ((this.keys.has("Space") || this.jumpQueued) && this.onGround) {
       this.vel.y = JUMP;
       this.onGround = false;
     }
+    this.jumpQueued = false;
 
     // Resolve each axis independently so we can slide along walls.
     const nx = this.pos.x + this.vel.x * dt;
