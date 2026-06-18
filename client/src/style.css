@@ -1,0 +1,298 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: #fff;
+  user-select: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  display: block;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---- Start overlay ---- */
+#start {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #2c3e50, #11161d);
+  z-index: 100;
+}
+.start-card {
+  text-align: center;
+  padding: 40px 48px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid #5a4a2a;
+  border-radius: 12px;
+}
+.start-card h1 {
+  font-size: 56px;
+  letter-spacing: 6px;
+  color: #ffd24a;
+  text-shadow: 3px 3px 0 #5a3a00;
+}
+.start-card p {
+  margin: 12px 0 24px;
+  color: #cfd8e3;
+}
+#name {
+  display: block;
+  width: 260px;
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  font-size: 16px;
+  border: 2px solid #5a4a2a;
+  border-radius: 6px;
+  background: #1c232b;
+  color: #fff;
+  text-align: center;
+}
+#play {
+  padding: 12px 28px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #2a1c00;
+  background: linear-gradient(#ffd24a, #e0a020);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#play:hover {
+  filter: brightness(1.08);
+}
+#start-error {
+  margin-top: 16px;
+  color: #ff8080;
+  min-height: 20px;
+}
+
+/* ---- HUD ---- */
+#crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 0 3px #000;
+  pointer-events: none;
+}
+
+#panel-left {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 220px;
+  padding: 10px 12px;
+  background: rgba(20, 16, 8, 0.6);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+  pointer-events: none;
+}
+#title {
+  font-size: 20px;
+  letter-spacing: 3px;
+  color: #ffd24a;
+  text-shadow: 2px 2px 0 #5a3a00;
+}
+#total-level {
+  font-size: 12px;
+  color: #cfd8e3;
+  margin-bottom: 8px;
+}
+.skill-row {
+  display: grid;
+  grid-template-columns: 70px 22px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  font-size: 12px;
+}
+.skill-name {
+  color: #e8dcc0;
+}
+.skill-level {
+  text-align: right;
+  font-weight: bold;
+  color: #ffd24a;
+}
+.skill-bar {
+  height: 8px;
+  background: #322a18;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.skill-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7bd66b, #3fa12f);
+}
+
+/* ---- Notices ---- */
+#notices {
+  position: fixed;
+  left: 50%;
+  top: 64%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  width: 480px;
+}
+.notice {
+  font-size: 15px;
+  color: #d8f0ff;
+  text-shadow: 1px 1px 2px #000;
+  margin: 2px 0;
+  animation: fade 5s forwards;
+}
+.notice.levelup {
+  color: #ffe066;
+  font-weight: bold;
+  font-size: 17px;
+}
+@keyframes fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Inventory ---- */
+#bottom {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#inventory {
+  display: grid;
+  grid-template-columns: repeat(14, 30px);
+  gap: 3px;
+  padding: 8px;
+  background: rgba(20, 16, 8, 0.6);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+}
+.slot {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  background: #2a2218;
+  border: 1px solid #3a3020;
+  border-radius: 3px;
+}
+.slot.placeable {
+  cursor: pointer;
+}
+.slot.selected {
+  outline: 2px solid #ffd24a;
+  outline-offset: -2px;
+}
+.slot .count {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 11px;
+  font-weight: bold;
+  color: #ffe066;
+  text-shadow: 1px 1px 1px #000;
+}
+
+/* ---- Chat ---- */
+#chat {
+  position: fixed;
+  bottom: 64px;
+  left: 12px;
+  width: 320px;
+}
+#chat-log {
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 13px;
+  text-shadow: 1px 1px 2px #000;
+  margin-bottom: 4px;
+}
+#chat-log div {
+  margin: 1px 0;
+}
+#chat-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #5a4a2a;
+  border-radius: 4px;
+  color: #fff;
+}
+
+/* ---- Panels (craft/help) ---- */
+.panel,
+#help {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 320px;
+  padding: 18px 22px;
+  background: rgba(20, 16, 8, 0.92);
+  border: 2px solid #5a4a2a;
+  border-radius: 10px;
+  z-index: 50;
+}
+.panel h3,
+#help h3 {
+  color: #ffd24a;
+  margin-bottom: 12px;
+}
+.craft-btn {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  margin: 4px 0;
+  padding: 8px 10px;
+  background: #2a2218;
+  border: 1px solid #5a4a2a;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+.craft-btn:hover {
+  background: #3a2f1c;
+}
+.craft-btn span {
+  font-size: 12px;
+  color: #b8c2cf;
+}
+#help {
+  max-width: 420px;
+}
+#help ul {
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #e8dcc0;
+}
+#help b {
+  color: #ffd24a;
+}
