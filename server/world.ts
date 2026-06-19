@@ -36,10 +36,19 @@ interface DepletedNode {
   respawnAtTick: number;
 }
 
+interface GrowingNode {
+  x: number;
+  y: number;
+  z: number;
+  /** Tick at which this sapling becomes a tree. */
+  at: number;
+}
+
 export class World {
   readonly seed: number;
   private chunks = new Map<string, Uint8Array>();
   private depleted: DepletedNode[] = [];
+  private growing: GrowingNode[] = [];
   /** Persistent player edits, per chunk, keyed by in-chunk index → block. */
   private editsByChunk = new Map<string, Map<number, BlockType>>();
   /** Flat height the origin town sits on (computed once from the seed). */
@@ -250,7 +259,50 @@ export class World {
         this.editsByChunk.set(key, edits);
       }
       edits.set(idx(lx, y, lz), block as BlockType);
+      // Saplings saved from a previous session still need to grow — reschedule
+      // them, spread out so they don't all sprout at once on restart.
+      if (block === BlockType.Sapling) this.growing.push({ x, y, z, at: 60 + Math.floor(Math.random() * 180) });
     }
+  }
+
+  /** Queue a planted sapling to grow into a tree after `ticks`. */
+  scheduleGrowth(x: number, y: number, z: number, ticks: number, tick: number): void {
+    this.growing = this.growing.filter((g) => g.x !== x || g.y !== y || g.z !== z);
+    this.growing.push({ x, y, z, at: tick + ticks });
+  }
+
+  /** Saplings ready to grow this tick (still saplings — not dug up meanwhile). */
+  tickGrowth(tick: number): { x: number; y: number; z: number }[] {
+    if (this.growing.length === 0) return [];
+    const ready = this.growing.filter((g) => g.at <= tick);
+    if (ready.length === 0) return [];
+    this.growing = this.growing.filter((g) => g.at > tick);
+    return ready
+      .filter((g) => this.getBlock(g.x, g.y, g.z) === BlockType.Sapling)
+      .map((g) => ({ x: g.x, y: g.y, z: g.z }));
+  }
+
+  /** Grow a full tree from a sapling base, returning the changed blocks to
+   *  broadcast. Trunk replaces the sapling; leaves only fill empty space. */
+  growTreeAt(x: number, y: number, z: number): { x: number; y: number; z: number; block: BlockType }[] {
+    const out: { x: number; y: number; z: number; block: BlockType }[] = [];
+    const put = (wx: number, wy: number, wz: number, block: BlockType, onlyAir: boolean) => {
+      if (wy < 0 || wy >= WORLD_HEIGHT) return;
+      if (onlyAir && this.getBlock(wx, wy, wz) !== BlockType.Air) return;
+      this.editBlock(wx, wy, wz, block);
+      out.push({ x: wx, y: wy, z: wz, block });
+    };
+    for (let i = 0; i < 4; i++) put(x, y + i, z, BlockType.Log, i !== 0); // base replaces the sapling
+    const topY = y + 4;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        for (let dy = -2; dy <= 1; dy++) {
+          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue; // round the corners
+          put(x + dx, topY + dy, z + dz, BlockType.Leaves, true);
+        }
+      }
+    }
+    return out;
   }
 
   /** Flatten edits for saving: [x, y, z, block]. */

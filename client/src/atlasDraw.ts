@@ -29,10 +29,11 @@ export const TILE_INDEX = {
   rune: 15,
   crystal: 16,
   snow: 17,
+  sapling: 18,
 };
 
 /** Number of tiles to render into the atlas. */
-export const NUM_TILES = 18;
+export const NUM_TILES = 19;
 
 function tile(i: number): { top: number; bottom: number; side: number } {
   return { top: i, bottom: i, side: i };
@@ -56,6 +57,7 @@ export const BLOCK_TILES: Partial<Record<BlockType, { top: number; bottom: numbe
   [BlockType.Runestone]: tile(TILE_INDEX.rune),
   [BlockType.Crystal]: tile(TILE_INDEX.crystal),
   [BlockType.Snow]: tile(TILE_INDEX.snow),
+  [BlockType.Sapling]: { top: TILE_INDEX.leaves, bottom: TILE_INDEX.dirt, side: TILE_INDEX.sapling },
 };
 
 // ---- tiny seeded RNG for repeatable noise per tile ----
@@ -218,6 +220,15 @@ export function drawTile(ctx: Ctx, index: number): void {
       fill(ctx, ox, oy, "#eef3fb");
       speckle(ctx, ox, oy, 161, 0.1, 0.5);
       blobs(ctx, ox, oy, 162, "#cdd9ee", 6, 2);
+      break;
+    case TILE_INDEX.sapling:
+      // A young sprout: earthy base, a slim stem, and a leafy green crown.
+      fill(ctx, ox, oy, "#7a5a36");
+      speckle(ctx, ox, oy, 171, 0.18, 0.6);
+      ctx.fillStyle = "#5a3d22"; // stem
+      ctx.fillRect(ox + 7, oy + 7, 2, 8);
+      blobs(ctx, ox, oy + 1, 172, "#4f9140", 16, 3); // foliage crown
+      blobs(ctx, ox, oy + 1, 173, "#2f5e26", 10, 2);
       break;
     default:
       fill(ctx, ox, oy, "#ff00ff");

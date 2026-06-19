@@ -24,6 +24,8 @@ const MELEE_RANGE = 2.4;
 const GIVE_UP_RANGE = 16;
 const REGEN_TICKS = 12; // +1 hp roughly every 7s
 const BANK_SLOTS = 240;
+const GROW_TICKS = 100; // ~60s for a planted sapling to become a tree
+const SAPLING_DROP_CHANCE = 0.2; // chance leaves yield a sapling when broken
 const ENTITY_VIEW = 64;
 const SNAPSHOT_EVERY = 2;
 const AUTOSAVE_MS = 30_000;
@@ -413,12 +415,30 @@ export class GameServer {
       this.applyEdit(x, y, z, BlockType.Air);
       // Mining out rock (stone, mossy stone, runestone, crystal) trains Mining.
       if (def.mineXp) this.awardXp(player, SkillId.Mining, def.mineXp);
+      // Breaking leaves sometimes yields a sapling you can replant.
+      if (current === BlockType.Leaves && Math.random() < SAPLING_DROP_CHANCE && hasSpaceFor(player.inventory, "sapling")) {
+        addItem(player.inventory, "sapling", 1);
+        this.send(player, { t: "inventory", inventory: player.inventory });
+        this.send(player, { t: "notice", text: "You find a sapling." });
+      }
     } else {
       if (current !== BlockType.Air && current !== BlockType.Water) return;
+      // Saplings can only take root on grass or dirt.
+      if (block === BlockType.Sapling) {
+        const below = this.world.getBlock(x, y - 1, z);
+        if (below !== BlockType.Grass && below !== BlockType.Dirt) {
+          this.send(player, { t: "notice", text: "Saplings need grass or dirt to grow." });
+          return;
+        }
+      }
       const itemId = Object.values(ITEMS).find((i) => i.placeBlock === block)?.id;
       if (!itemId || !removeItem(player.inventory, itemId, 1)) return;
       this.send(player, { t: "inventory", inventory: player.inventory });
       this.applyEdit(x, y, z, block);
+      if (block === BlockType.Sapling) {
+        this.world.scheduleGrowth(x, y, z, GROW_TICKS, this.tick);
+        this.send(player, { t: "notice", text: "You plant the sapling — it will grow into a tree." });
+      }
     }
   }
 
@@ -899,6 +919,12 @@ export class GameServer {
     this.tickGathering();
     for (const r of this.world.tickRespawns(this.tick)) {
       this.broadcast({ t: "worldEdit", x: r.x, y: r.y, z: r.z, block: r.block });
+    }
+    // Planted saplings grow into full trees.
+    for (const g of this.world.tickGrowth(this.tick)) {
+      for (const e of this.world.growTreeAt(g.x, g.y, g.z)) {
+        this.broadcast({ t: "worldEdit", x: e.x, y: e.y, z: e.z, block: e.block });
+      }
     }
 
     // Player-initiated combat.
