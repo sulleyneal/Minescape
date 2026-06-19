@@ -6,10 +6,10 @@ import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import pg from "pg";
 import { ItemStack } from "../shared/items";
+import { Skin, Vec3 } from "../shared/protocol";
+import { Skills } from "../shared/skills";
 
 const { Pool } = pg;
-import { Vec3 } from "../shared/protocol";
-import { Skills } from "../shared/skills";
 
 export const SAVE_VERSION = 1;
 
@@ -23,6 +23,7 @@ export interface PlayerSave {
   name: string;
   salt: string | null;
   passHash: string | null;
+  skin?: Skin;
   skills: Skills;
   inventory: (ItemStack | null)[];
   bank: (ItemStack | null)[];

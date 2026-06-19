@@ -3,12 +3,13 @@
 // combat with monsters, NPC dialogue, banking, shops, and quests.
 
 import { WebSocket } from "ws";
+import { sanitizeSkin } from "../shared/appearance";
 import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
 import { MonsterDef, NPCS, QUESTS, questByGiver, SHOP } from "../shared/entities";
 import { nodeForBlock, recipeById } from "../shared/gathering";
 import { bestTool, bestWeapon, ITEMS } from "../shared/items";
-import { ClientMessage, EntitySnapshot, ServerMessage, Vec3 } from "../shared/protocol";
+import { ClientMessage, EntitySnapshot, ServerMessage, Skin, Vec3 } from "../shared/protocol";
 import { emptySkills, levelForXp, maxHitpoints, SkillId, Skills } from "../shared/skills";
 import { addItem, countItem, hasSpaceFor, Inventory, removeItem, startingInventory } from "./inventory";
 import { MonsterEntity, NpcEntity, rollLoot, spawnWorldEntities, WorldEntities } from "./entities";
@@ -33,6 +34,7 @@ interface Player {
   accountKey: string | null;
   salt: string | null;
   passHash: string | null;
+  skin: Skin;
   socket: WebSocket;
   pos: Vec3;
   yaw: number;
@@ -114,6 +116,7 @@ export class GameServer {
       accountKey: null,
       salt: null,
       passHash: null,
+      skin: { body: "#cc4444", head: "#e0b48a" },
       socket,
       pos: this.findSpawn(),
       yaw: 0,
@@ -176,7 +179,7 @@ export class GameServer {
     if (msg.t !== "join" && !player.loggedIn) return; // ignore until logged in
     switch (msg.t) {
       case "join":
-        this.onJoin(player, msg.name, msg.password ?? "");
+        this.onJoin(player, msg.name, msg.password ?? "", msg.skin);
         break;
       case "move":
         player.pos = msg.pos;
@@ -217,7 +220,7 @@ export class GameServer {
     }
   }
 
-  private onJoin(player: Player, name: string, password: string): void {
+  private onJoin(player: Player, name: string, password: string, skin: Skin | undefined): void {
     if (player.loggedIn) return;
     const display = (name || "Adventurer").trim().slice(0, 16) || "Adventurer";
     const key = display.toLowerCase();
@@ -244,6 +247,9 @@ export class GameServer {
       player.name = display;
     }
 
+    // A skin sent at login overrides the saved one (lets you re-customise).
+    player.skin = sanitizeSkin(skin ?? (existing ? player.skin : undefined), display);
+
     player.accountKey = key;
     player.loggedIn = true;
     this.online.set(key, player.id);
@@ -256,7 +262,7 @@ export class GameServer {
       spawn: player.pos,
       players: [...this.players.values()]
         .filter((p) => p.id !== player.id && p.loggedIn)
-        .map((p) => ({ id: p.id, name: p.name, pos: p.pos, yaw: p.yaw })),
+        .map((p) => ({ id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, skin: p.skin })),
       inventory: player.inventory,
       skills: player.skills,
       hp: player.hp,
@@ -274,7 +280,7 @@ export class GameServer {
       }
     }
     this.broadcast(
-      { t: "playerJoined", player: { id: player.id, name: player.name, pos: player.pos, yaw: player.yaw } },
+      { t: "playerJoined", player: { id: player.id, name: player.name, pos: player.pos, yaw: player.yaw, skin: player.skin } },
       player.id,
     );
     console.log(`[minescape] ${player.name} ${existing ? "logged in" : "registered"} (${this.players.size} online)`);
@@ -287,6 +293,7 @@ export class GameServer {
       name: player.name,
       salt: player.salt,
       passHash: player.passHash,
+      skin: player.skin,
       skills: player.skills,
       inventory: player.inventory,
       bank: player.bank,
@@ -306,6 +313,7 @@ export class GameServer {
     player.name = s.name;
     player.salt = s.salt;
     player.passHash = s.passHash;
+    if (s.skin) player.skin = s.skin;
     // Merge skills so characters saved before a new skill existed still load.
     player.skills = { ...emptySkills(), ...s.skills };
     player.inventory = padSlots(s.inventory, player.inventory.length);

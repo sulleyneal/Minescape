@@ -100,10 +100,16 @@ export class Renderer {
 
   // ---- Remote players ----
 
-  upsertPlayer(id: string, name: string, pos: { x: number; y: number; z: number }, yaw: number): void {
+  upsertPlayer(
+    id: string,
+    name: string,
+    pos: { x: number; y: number; z: number },
+    yaw: number,
+    skin?: { body: string; head: string },
+  ): void {
     let group = this.playerMeshes.get(id);
     if (!group) {
-      group = this.makeAvatar(name);
+      group = this.makeAvatar(name, skin ?? { body: "#cc4444", head: "#e0b48a" });
       this.playerMeshes.set(id, group);
       this.scene.add(group);
     }
@@ -118,19 +124,28 @@ export class Renderer {
     this.playerMeshes.delete(id);
   }
 
-  private makeAvatar(name: string): THREE.Group {
+  private makeAvatar(name: string, skin: { body: string; head: string }): THREE.Group {
     const group = new THREE.Group();
     const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.6, 1.8, 0.6),
-      new THREE.MeshBasicMaterial({ color: 0xcc4444 }),
+      new THREE.BoxGeometry(0.6, 1.3, 0.4),
+      new THREE.MeshLambertMaterial({ color: skin.body }),
     );
-    body.position.y = 0.9;
+    body.position.y = 1.05;
     group.add(body);
+    // Simple arms and legs in the body color, for a less blocky silhouette.
+    for (const dx of [-0.4, 0.4]) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), new THREE.MeshLambertMaterial({ color: skin.body }));
+      arm.position.set(dx, 1.1, 0);
+      group.add(arm);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 0.25), new THREE.MeshLambertMaterial({ color: 0x33373f }));
+      leg.position.set(dx * 0.45, 0.45, 0);
+      group.add(leg);
+    }
     const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 0.5, 0.5),
-      new THREE.MeshBasicMaterial({ color: 0xe0b48a }),
+      new THREE.BoxGeometry(0.55, 0.55, 0.55),
+      new THREE.MeshLambertMaterial({ color: skin.head }),
     );
-    head.position.y = 2.05;
+    head.position.y = 2.0;
     group.add(head);
     group.add(this.makeNameTag(name));
     return group;

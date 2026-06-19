@@ -78,6 +78,29 @@ body {
   color: #9aa6b4;
   line-height: 1.4;
 }
+.skin-label {
+  font-size: 13px;
+  color: #cfd8e3;
+  margin: 6px 0 6px;
+}
+.swatches {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 2px solid #5a4a2a;
+  cursor: pointer;
+  padding: 0;
+}
+.swatch.selected {
+  outline: 2px solid #ffd24a;
+  outline-offset: 1px;
+}
 #play {
   padding: 12px 28px;
   font-size: 16px;

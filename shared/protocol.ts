@@ -16,6 +16,7 @@ export interface PlayerState {
   name: string;
   pos: Vec3;
   yaw: number;
+  skin: Skin;
 }
 
 // ---- Client -> Server ----
@@ -25,6 +26,15 @@ export interface JoinMsg {
   name: string;
   /** Optional password protecting the character on this name. */
   password?: string;
+  /** Chosen avatar appearance (hex colors). */
+  skin?: Skin;
+}
+
+export interface Skin {
+  /** Body/shirt color, hex like "#cc4444". */
+  body: string;
+  /** Skin tone for the head, hex. */
+  head: string;
 }
 
 export interface MoveMsg {

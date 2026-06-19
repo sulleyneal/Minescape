@@ -35,7 +35,13 @@ export class Game {
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
 
-  constructor(canvas: HTMLCanvasElement, hudRoot: HTMLElement, private playerName: string, private password: string) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    hudRoot: HTMLElement,
+    private playerName: string,
+    private password: string,
+    private skin: { body: string; head: string },
+  ) {
     this.renderer = new Renderer(canvas, this.world);
     this.hud = new Hud(hudRoot, (m) => this.net.send(m));
     this.controls = new Controls(canvas, this.renderer.camera, this.world, () => this.hud.isTyping());
@@ -50,7 +56,7 @@ export class Game {
   async start(): Promise<void> {
     await this.net.connect();
     this.net.onMessage((m) => this.onMessage(m));
-    this.net.send({ t: "join", name: this.playerName, password: this.password });
+    this.net.send({ t: "join", name: this.playerName, password: this.password, skin: this.skin });
     this.loop();
     return new Promise<void>((resolve, reject) => {
       this.loginResolve = resolve;
@@ -189,7 +195,7 @@ export class Game {
         this.hud.setInventory(m.inventory);
         this.hud.setSkills(m.skills);
         this.hud.setHealth(m.hp, m.maxHp);
-        for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw);
+        for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw, p.skin);
         this.hud.notice("Welcome to Minescape! Press H for help.");
         break;
       case "chunk":
@@ -199,7 +205,7 @@ export class Game {
         this.world.setBlock(m.x, m.y, m.z, m.block);
         break;
       case "playerJoined":
-        this.renderer.upsertPlayer(m.player.id, m.player.name, m.player.pos, m.player.yaw);
+        this.renderer.upsertPlayer(m.player.id, m.player.name, m.player.pos, m.player.yaw, m.player.skin);
         this.hud.notice(`${m.player.name} joined.`);
         break;
       case "playerMoved":
