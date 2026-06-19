@@ -38,6 +38,7 @@ export class Game {
   /** Monster we're locked onto: auto-walk into range and show its health bar. */
   private combatTargetId: string | null = null;
   private lastMoveSent = 0;
+  private lastTrackerUpdate = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
 
@@ -107,6 +108,33 @@ export class Game {
     }
     if (this.combatHold) return;
     this.updateMining(dt);
+  }
+
+  // Point a compass arrow at each other online player (throttled ~8/s). The
+  // arrow is rotated so "up" means dead ahead of where you're looking.
+  private updateTrackers(): void {
+    const now = performance.now();
+    if (now - this.lastTrackerUpdate < 120) return;
+    this.lastTrackerUpdate = now;
+    const others = this.renderer.otherPlayers();
+    const me = this.controls.pos;
+    const yaw = this.controls.yaw;
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const rx = -fz; // right vector = forward rotated -90°
+    const rz = fx;
+    const list = others
+      .map((o) => {
+        const dx = o.pos.x - me.x;
+        const dz = o.pos.z - me.z;
+        return {
+          name: o.name,
+          rot: (Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz) * 180) / Math.PI,
+          dist: Math.hypot(dx, dz),
+        };
+      })
+      .sort((a, b) => a.dist - b.dist);
+    this.hud.setPlayerTrackers(list);
   }
 
   // Keep the locked target's health bar current and stride into melee range.
@@ -325,6 +353,7 @@ export class Game {
       this.controls.update(dt);
       this.handleActions(dt);
       this.updateCombat();
+      this.updateTrackers();
     } else {
       this.controls.placeCamera();
     }

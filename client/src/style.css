@@ -470,6 +470,48 @@ body {
   color: #ffd24a;
 }
 
+/* ---- Player direction trackers ---- */
+#trackers {
+  position: fixed;
+  top: 92px;
+  right: 12px;
+  width: 200px;
+  padding: 8px 10px;
+  background: rgba(20, 16, 8, 0.7);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e8dcc0;
+}
+#trackers .tk-title {
+  font-weight: bold;
+  color: #ffd24a;
+  margin-bottom: 4px;
+}
+#trackers .tk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.6;
+}
+#trackers .tk-arrow {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  color: #7fd0ff;
+  transition: transform 0.12s linear;
+}
+#trackers .tk-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#trackers .tk-dist {
+  color: #b9a87f;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- Damage flash ---- */
 #dmg-flash {
   position: fixed;

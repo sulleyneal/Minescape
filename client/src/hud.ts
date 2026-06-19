@@ -371,6 +371,27 @@ export class Hud {
     this.panel("#target-bar").classList.add("hidden");
   }
 
+  /** Compass-style pointers to other online players. Arrow up = dead ahead. */
+  setPlayerTrackers(list: { name: string; rot: number; dist: number }[]): void {
+    const el = this.panel("#trackers");
+    if (list.length === 0) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+    el.classList.remove("hidden");
+    el.innerHTML = `<div class="tk-title">Players nearby</div>`;
+    for (const t of list) {
+      const row = document.createElement("div");
+      row.className = "tk-row";
+      row.innerHTML =
+        `<span class="tk-arrow" style="transform:rotate(${t.rot}deg)">▲</span>` +
+        `<span class="tk-name">${escapeHtml(t.name)}</span>` +
+        `<span class="tk-dist">${Math.round(t.dist)}m</span>`;
+      el.appendChild(row);
+    }
+  }
+
   setEquipment(equipment: Equipment, bonuses: CombatBonuses): void {
     this.equipment = equipment;
     this.bonuses = bonuses;
@@ -583,6 +604,7 @@ const TEMPLATE = `
     <div class="tb-hp"><i></i><span></span></div>
   </div>
   <div id="quest-tracker" class="hidden"></div>
+  <div id="trackers" class="hidden"></div>
   <div id="notices"></div>
 
   <div id="dialogue" class="panel hidden">

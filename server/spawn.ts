@@ -5,6 +5,7 @@
 import { BlockType } from "../shared/blocks";
 import { WORLD_HEIGHT } from "../shared/constants";
 import { Vec3 } from "../shared/protocol";
+import { townSpawnCandidates } from "./village";
 import { World } from "./world";
 
 /** Top-down scan of one column: returns a standing position on solid ground,
@@ -26,6 +27,13 @@ export function clearColumn(world: World, x: number, z: number): Vec3 | null {
 }
 
 export function findSpawn(world: World): Vec3 {
+  // Prefer the town square (clear of the centre fountain) so players arrive in
+  // the plaza, facing the buildings and the landmark tower.
+  for (const [x, z] of townSpawnCandidates()) {
+    const spawn = clearColumn(world, x, z);
+    if (spawn) return spawn;
+  }
+
   const offsets: [number, number][] = [];
   const R = 10;
   for (let dx = -R; dx <= R; dx++) {

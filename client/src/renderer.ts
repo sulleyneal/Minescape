@@ -154,6 +154,11 @@ export class Renderer {
     this.playerMeshes.delete(id);
   }
 
+  /** Names + positions of every other player avatar, for the on-screen tracker. */
+  otherPlayers(): { name: string; pos: THREE.Vector3 }[] {
+    return [...this.playerMeshes.values()].map((v) => ({ name: v.name, pos: v.group.position.clone() }));
+  }
+
   /** (Re)build an avatar's meshes from its current skin + worn gear. */
   private rebuildAvatar(vis: PlayerVisual): void {
     const { group, skin, gear } = vis;

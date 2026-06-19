@@ -11,8 +11,11 @@ import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from "../shared/constants";
 
 const PLAZA_FLAT = 18; // fully flattened plaza radius
 const PLAZA_BLEND = 32; // terrain eases back to natural height by here
+const ROAD_INNER = 10; // roads start out here, leaving the square clear
 const ROAD_LEN = 80; // how far the roads reach into the wild
 const ROAD_HALF = 1; // road half-width → 3 blocks wide
+const WALL_HALF = 13; // town wall sits on this square's perimeter
+const COBBLE = 7; // cobbled square radius at the centre
 
 // Eight spokes (cardinals + diagonals) so almost any heading crosses a road.
 const ROAD_DIRS: [number, number][] = [
@@ -99,12 +102,13 @@ export function inBuilding(wx: number, wz: number): boolean {
   return HOUSES.some((h) => inRect(h, wx, wz));
 }
 
-/** True if a road paves this column's surface. */
+/** True if a road paves this column's surface. Roads start out past the square
+ *  so the central plaza stays clear for the fountain and market. */
 export function onRoad(wx: number, wz: number): boolean {
   for (const [dx, dz] of ROAD_DIRS) {
     const len = Math.hypot(dx, dz);
     const proj = (wx * dx + wz * dz) / len; // distance along the spoke
-    if (proj < 0 || proj > ROAD_LEN) continue;
+    if (proj < ROAD_INNER || proj > ROAD_LEN) continue;
     const perp = Math.abs(wx * dz - wz * dx) / len; // distance from the spoke
     if (perp <= ROAD_HALF) return true;
   }
@@ -122,7 +126,9 @@ export function villageNoTree(wx: number, wz: number): boolean {
 export function villageSurface(wx: number, wz: number): BlockType | null {
   if (inBuilding(wx, wz)) return BlockType.Plank; // building floor
   if (onRoad(wx, wz)) return BlockType.Dirt; // packed-earth path
-  if (Math.hypot(wx, wz) <= PLAZA_BLEND) return BlockType.Grass;
+  const d = Math.hypot(wx, wz);
+  if (d <= COBBLE) return BlockType.Stone; // cobbled town square
+  if (d <= PLAZA_BLEND) return BlockType.Grass;
   return null;
 }
 
@@ -220,6 +226,32 @@ function treeColumn(p: Prop, wx: number, wz: number, sY: number, out: Placed[]):
   out.push({ y: sY + 4, block: BlockType.Leaves }); // 3×3 canopy
 }
 
+// A 3×3 fountain at the plaza centre: stone basin, water pool, glowing jet.
+function fountainColumn(wx: number, wz: number, sY: number, out: Placed[]): void {
+  const ax = Math.abs(wx);
+  const az = Math.abs(wz);
+  if (ax > 1 || az > 1) return;
+  if (wx === 0 && wz === 0) {
+    out.push({ y: sY + 1, block: BlockType.Stone }); // jet plinth
+    out.push({ y: sY + 2, block: BlockType.Crystal }); // glowing spout
+  } else if (ax === 1 && az === 1) {
+    out.push({ y: sY + 1, block: BlockType.Stone }); // corner posts
+    out.push({ y: sY + 2, block: BlockType.Stone });
+  } else {
+    out.push({ y: sY + 1, block: BlockType.Water }); // pool edges
+  }
+}
+
+// Crenellated stone wall around the town, with gateways where the roads cross.
+function wallColumn(wx: number, wz: number, sY: number, out: Placed[]): void {
+  if (Math.max(Math.abs(wx), Math.abs(wz)) !== WALL_HALF) return;
+  if (onRoad(wx, wz) || inBuilding(wx, wz)) return; // gateway / merges into a building
+  out.push({ y: sY + 1, block: BlockType.Stone });
+  out.push({ y: sY + 2, block: BlockType.Stone });
+  if ((wx + wz) % 2 === 0) out.push({ y: sY + 3, block: BlockType.Stone }); // merlons
+  if ((wx + wz) % 6 === 0) out.push({ y: sY + 4, block: BlockType.Crystal }); // wall lamps
+}
+
 /** All blocks to place above the surface at this column. */
 export function villageStructure(wx: number, wz: number, sY: number): Placed[] {
   const out: Placed[] = [];
@@ -227,7 +259,15 @@ export function villageStructure(wx: number, wz: number, sY: number): Placed[] {
   for (const t of TOWERS) towerColumn(t, wx, wz, sY, out);
   for (const l of LAMPS) lampColumn(l, wx, wz, sY, out);
   for (const tr of TREES) treeColumn(tr, wx, wz, sY, out);
+  fountainColumn(wx, wz, sY, out);
+  wallColumn(wx, wz, sY, out);
   return out;
+}
+
+/** A safe, structure-free standing tile in the plaza (the fountain occupies the
+ *  exact centre, so we spawn just clear of it). */
+export function townSpawnCandidates(): [number, number][] {
+  return [[0, 3], [3, 0], [0, -3], [-3, 0], [2, 2], [-2, 2], [2, -2], [-2, -2]];
 }
 
 /** Cheap reject so far-flung chunks skip all village work. */
