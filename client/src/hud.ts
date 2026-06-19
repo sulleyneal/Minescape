@@ -357,6 +357,20 @@ export class Hud {
     (bar.querySelector("span") as HTMLElement).textContent = `❤ ${Math.ceil(hp)}/${maxHp}`;
   }
 
+  /** Show/update the locked combat target's name + health. */
+  setTargetBar(name: string, hp: number, maxHp: number, level?: number): void {
+    const el = this.panel("#target-bar");
+    el.classList.remove("hidden");
+    (el.querySelector(".tb-name") as HTMLElement).textContent = level ? `${name} (Lv ${level})` : name;
+    const frac = Math.max(0, Math.min(1, hp / maxHp));
+    (el.querySelector(".tb-hp i") as HTMLElement).style.width = `${frac * 100}%`;
+    (el.querySelector(".tb-hp span") as HTMLElement).textContent = `${Math.ceil(hp)}/${maxHp}`;
+  }
+
+  hideTargetBar(): void {
+    this.panel("#target-bar").classList.add("hidden");
+  }
+
   setEquipment(equipment: Equipment, bonuses: CombatBonuses): void {
     this.equipment = equipment;
     this.bonuses = bonuses;
@@ -564,6 +578,10 @@ const TEMPLATE = `
     <div id="skills"></div>
   </div>
   <div id="health"><i></i><span>❤</span></div>
+  <div id="target-bar" class="hidden">
+    <div class="tb-name"></div>
+    <div class="tb-hp"><i></i><span></span></div>
+  </div>
   <div id="quest-tracker" class="hidden"></div>
   <div id="notices"></div>
 
@@ -630,7 +648,8 @@ const TEMPLATE = `
       <li><b>Hold left click</b> to mine — harder blocks take longer; the bar under the crosshair shows progress</li>
       <li>Tools matter: <b>hatchet</b> for trees/wood, <b>pickaxe</b> for stone &amp; ore, <b>shovel</b> for dirt/sand. You start with bronze ones</li>
       <li>Hold left click on a tree / ore / water to gather (Woodcutting, Mining, Fishing)</li>
-      <li><b>Click a monster</b> to fight it — mind your health bar! Click an <b>NPC</b> in the town to talk, bank, shop, or take a quest</li>
+      <li><b>Click a monster</b> to fight it — you'll stride into range automatically and its health bar appears up top. Mind your own health! Click an <b>NPC</b> in town to talk, bank, shop, or take a quest</li>
+      <li>Monsters den in <b>lairs</b> out in their home biomes — goblin camps in the plains, wolf dens in the woods, scorpion nests in the desert, a skeleton crypt in the peaks. Captain Rovan's quests send you to each</li>
       <li>Explore: <b>plains, forests, deserts, snowy tundra and mountains</b>, each with their own creatures</li>
       <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge gear via Smithing in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>

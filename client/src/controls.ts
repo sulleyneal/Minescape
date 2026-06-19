@@ -37,6 +37,9 @@ export class Controls {
   // Touch/virtual input, fed by the on-screen controls on mobile.
   touchForward = 0; // -1..1
   touchStrafe = 0; // -1..1
+  /** When set, auto-walk toward this world point (used to close on a combat
+   *  target). Any manual movement input overrides it. */
+  autoMove: THREE.Vector3 | null = null;
   /** True while the mine/break action is held (mouse or touch). */
   primaryHeld = false;
   private jumpQueued = false;
@@ -153,6 +156,17 @@ export class Controls {
     }
     this.vel.x = dx;
     this.vel.z = dz;
+
+    // No manual input but a combat target set: stride toward it automatically.
+    if (forward === 0 && strafe === 0 && this.autoMove) {
+      const ax = this.autoMove.x - this.pos.x;
+      const az = this.autoMove.z - this.pos.z;
+      const alen = Math.hypot(ax, az);
+      if (alen > 0.0001) {
+        this.vel.x = (ax / alen) * SPEED;
+        this.vel.z = (az / alen) * SPEED;
+      }
+    }
 
     this.vel.y -= GRAVITY * dt;
     if ((this.keys.has("Space") || this.jumpQueued) && this.onGround) {

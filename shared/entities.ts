@@ -129,11 +129,17 @@ export interface QuestDef {
   rewardCoins: number;
   rewardXp: { skill: SkillId; amount: number };
   rewardItem?: string;
+  /** Quest id that must be completed before this one is offered (chain order). */
+  requires?: string;
   offerText: string;
+  /** Shown right after the player accepts (a parting hint). */
+  acceptText: string;
   progressText: string;
   completeText: string;
 }
 
+// A short quest chain from Captain Rovan that walks the player out to each of
+// the biome lairs in turn, escalating the foe and the reward.
 export const QUESTS: QuestDef[] = [
   {
     id: "goblin_cull",
@@ -144,11 +150,62 @@ export const QUESTS: QuestDef[] = [
     rewardCoins: 150,
     rewardXp: { skill: SkillId.Attack, amount: 500 },
     rewardItem: "iron_sword",
-    offerText: "Slay 6 goblins in the plains and I'll reward you well. Will you help?",
+    offerText: "Slay 6 goblins at their camps in the plains and forests. Will you help?",
+    acceptText: "Good hunting. The goblins gather in camps out in the plains and forests.",
     progressText: "The goblins still trouble us. Return when {n} more lie defeated.",
     completeText: "You've done it! Take this blade and coin, hero. You've earned it.",
   },
+  {
+    id: "wolf_pack",
+    name: "Thin the Pack",
+    giver: "quest",
+    killMonster: "wolf",
+    killCount: 5,
+    rewardCoins: 250,
+    rewardXp: { skill: SkillId.Defence, amount: 900 },
+    rewardItem: "iron_helm",
+    requires: "goblin_cull",
+    offerText: "Grey wolves den in the forests and tundra and harry our trappers. Cull 5 of them?",
+    acceptText: "Mind their fangs — the dens lie out in the colder woods and the tundra.",
+    progressText: "The pack still howls. {n} more wolves must fall.",
+    completeText: "The trappers can breathe again. This helm is yours, warrior.",
+  },
+  {
+    id: "desert_menace",
+    name: "Scourge of the Sands",
+    giver: "quest",
+    killMonster: "scorpion",
+    killCount: 5,
+    rewardCoins: 400,
+    rewardXp: { skill: SkillId.Strength, amount: 1500 },
+    rewardItem: "iron_body",
+    requires: "wolf_pack",
+    offerText: "Sand scorpions nest deep in the desert and sting any who pass. Destroy 5 nests-worth?",
+    acceptText: "Watch the dunes — the nests bake out in the open desert.",
+    progressText: "The sands still crawl. {n} more scorpions remain.",
+    completeText: "The trade roads are safe once more. Wear this plate with pride.",
+  },
+  {
+    id: "crypt_cleansing",
+    name: "The Mountain Crypt",
+    giver: "quest",
+    killMonster: "skeleton",
+    killCount: 4,
+    rewardCoins: 1000,
+    rewardXp: { skill: SkillId.Hitpoints, amount: 2500 },
+    rewardItem: "aether_sword",
+    requires: "desert_menace",
+    offerText: "The dead stir in a crypt high in the mountains. Lay 4 skeletons to rest — the realm's last threat.",
+    acceptText: "May the light guide you. The crypt waits high in the peaks.",
+    progressText: "The crypt is not yet still. {n} more of the dead must fall.",
+    completeText: "You have saved us all. Bear the Aether Blade, champion of Minescape.",
+  },
 ];
+
+/** Every quest a given NPC hands out, in chain order. */
+export function questsByGiver(npcId: string): QuestDef[] {
+  return QUESTS.filter((q) => q.giver === npcId);
+}
 
 export function questByGiver(npcId: string): QuestDef | undefined {
   return QUESTS.find((q) => q.giver === npcId);

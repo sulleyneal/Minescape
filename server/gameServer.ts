@@ -6,7 +6,7 @@ import { WebSocket } from "ws";
 import { sanitizeSkin } from "../shared/appearance";
 import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
-import { MonsterDef, NPCS, QUESTS, questByGiver, SHOP } from "../shared/entities";
+import { MonsterDef, NPCS, QuestDef, QUESTS, questsByGiver, SHOP } from "../shared/entities";
 import { emptyEquipment, Equipment, equipmentBonuses, EQUIP_SLOTS, EquipSlot, gearFromEquipment } from "../shared/equipment";
 import { GRID_SIZE, matchGrid } from "../shared/crafting";
 import { nodeForBlock, recipeById } from "../shared/gathering";
@@ -24,7 +24,6 @@ const MELEE_RANGE = 2.4;
 const GIVE_UP_RANGE = 16;
 const REGEN_TICKS = 12; // +1 hp roughly every 7s
 const BANK_SLOTS = 240;
-const MONSTER_COUNT = 70;
 const ENTITY_VIEW = 64;
 const SNAPSHOT_EVERY = 2;
 const AUTOSAVE_MS = 30_000;
@@ -95,7 +94,7 @@ export class GameServer {
     this.world = new World(seed);
     this.world.loadEdits(save?.world);
     if (save) for (const [key, rec] of Object.entries(save.accounts)) this.accounts.set(key, rec);
-    this.entities = spawnWorldEntities(this.world, MONSTER_COUNT);
+    this.entities = spawnWorldEntities(this.world);
     setInterval(() => this.onTick(), TICK_MS);
     setInterval(() => this.saveNow(), AUTOSAVE_MS);
     console.log(
@@ -607,13 +606,23 @@ export class GameServer {
     }
   }
 
+  /** The next quest a giver should offer/track: first incomplete one whose
+   *  prerequisite is met. Returns undefined when the chain is finished. */
+  private currentQuest(player: Player, giverId: string): QuestDef | undefined {
+    for (const q of questsByGiver(giverId)) {
+      if (player.questDone.has(q.id)) continue;
+      if (q.requires && !player.questDone.has(q.requires)) continue;
+      return q;
+    }
+    return undefined;
+  }
+
   private sendQuestDialogue(player: Player, npc: NpcEntity): void {
-    const quest = questByGiver("quest");
-    if (!quest) return;
-    if (player.questDone.has(quest.id)) {
+    const quest = this.currentQuest(player, "quest");
+    if (!quest) {
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "Thanks again, hero. The plains are safer because of you.",
+        text: "You've answered every call, champion. The realm is at peace because of you.",
         options: [{ id: "bye", label: "Farewell" }],
       });
       return;
@@ -627,7 +636,7 @@ export class GameServer {
     }
     const progress = player.questProgress[quest.id] ?? 0;
     if (progress >= quest.killCount) {
-      this.completeQuest(player, npc);
+      this.completeQuest(player, npc, quest);
     } else {
       const remaining = quest.killCount - progress;
       this.send(player, {
@@ -638,8 +647,7 @@ export class GameServer {
     }
   }
 
-  private completeQuest(player: Player, npc: NpcEntity): void {
-    const quest = questByGiver("quest")!;
+  private completeQuest(player: Player, npc: NpcEntity, quest: QuestDef): void {
     player.questActive.delete(quest.id);
     player.questDone.add(quest.id);
     addItem(player.inventory, "coins", quest.rewardCoins);
@@ -686,13 +694,14 @@ export class GameServer {
       this.send(player, { t: "closeUi", ui: "dialogue" });
       this.send(player, { t: "shop", name: SHOP.name, entries: SHOP.entries.map((e) => ({ item: e.item, price: e.price })) });
     } else if (option === "accept" && npc.def.role === "quest") {
-      const quest = questByGiver("quest")!;
+      const quest = this.currentQuest(player, "quest");
+      if (!quest) return;
       player.questActive.add(quest.id);
       player.questProgress[quest.id] = 0;
       this.send(player, { t: "quest", id: quest.id, name: quest.name, status: "active", progress: 0, goal: quest.killCount });
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "Good hunting. The goblins lurk in the plains and forests.",
+        text: quest.acceptText,
         options: [{ id: "bye", label: "I won't fail" }],
       });
     }
@@ -1011,8 +1020,8 @@ export class GameServer {
       if (Math.random() < 0.4) m.headingTicks = 0; // sometimes just pause
     }
     m.headingTicks--;
-    // Stay near the spawn (leash).
-    if (horizDist(m.pos, m.spawn) > 9) m.heading = Math.atan2(m.spawn.x - m.pos.x, m.spawn.z - m.pos.z);
+    // Stay near the spawn (leash), keeping each lair's pack clustered.
+    if (horizDist(m.pos, m.spawn) > m.leash) m.heading = Math.atan2(m.spawn.x - m.pos.x, m.spawn.z - m.pos.z);
     const speed = 0.12;
     m.pos.x += Math.sin(m.heading) * speed;
     m.pos.z += Math.cos(m.heading) * speed;
