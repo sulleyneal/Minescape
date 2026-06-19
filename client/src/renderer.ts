@@ -6,6 +6,7 @@ import { Gear } from "../../shared/equipment";
 import { EntitySnapshot, Skin } from "../../shared/protocol";
 import { ClientWorld } from "./world";
 import { buildChunkMeshes, ChunkMeshes } from "./chunkMesher";
+import { buildMonsterModel, buildNpcModel } from "./models";
 
 interface PlayerVisual {
   group: THREE.Group;
@@ -16,7 +17,6 @@ interface PlayerVisual {
 
 interface EntityVisual {
   group: THREE.Group;
-  body: THREE.Mesh;
   plate: THREE.Sprite;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -223,37 +223,25 @@ export class Renderer {
     for (const [id, vis] of this.entityVisuals) {
       if (seen.has(id)) continue;
       this.scene.remove(vis.group);
-      vis.body.geometry.dispose();
+      vis.group.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+      });
       this.entityVisuals.delete(id);
     }
   }
 
   private makeEntity(e: EntitySnapshot): EntityVisual {
     const group = new THREE.Group();
-    const color = new THREE.Color(e.kind === "npc" ? this.npcColor(e.type) : this.monsterColor(e.type));
-    const dark = color.clone().multiplyScalar(0.7);
-    const scale = e.kind === "npc" ? 1 : 0.9;
-    const mat = new THREE.MeshLambertMaterial({ color });
-    const legMat = new THREE.MeshLambertMaterial({ color: dark });
+    const color = e.kind === "npc" ? this.npcColor(e.type) : this.monsterColor(e.type);
+    const lowSlung = e.type === "wolf" || e.type === "scorpion";
 
-    group.add(this.makeBlob(0.45 * scale));
+    group.add(this.makeBlob(lowSlung ? 0.7 : 0.45));
 
-    // Legs, torso and head give a clearer silhouette than a single box.
-    for (const dx of [-0.16, 0.16]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.5 * scale, 0.25 * scale), legMat);
-      leg.position.set(dx * scale, 0.25 * scale, 0);
-      group.add(leg);
-    }
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.8 * scale, 0.4 * scale), mat);
-    body.position.y = 0.9 * scale;
-    body.userData.entityId = e.id;
-    body.userData.entityKind = e.kind;
-    group.add(body);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45 * scale, 0.45 * scale, 0.45 * scale), mat);
-    head.position.y = 1.55 * scale;
-    head.userData.entityId = e.id;
-    head.userData.entityKind = e.kind;
-    group.add(head);
+    const model = e.kind === "npc" ? buildNpcModel(e.type, color) : buildMonsterModel(e.type, color);
+    group.add(model);
+    // Mark the whole group so any part of the model is clickable for attack/talk.
+    group.userData.entityId = e.id;
+    group.userData.entityKind = e.kind;
 
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -261,11 +249,11 @@ export class Renderer {
     const plate = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }),
     );
-    plate.position.y = 2.1 * scale;
+    plate.position.y = lowSlung ? 1.5 : 2.1;
     plate.scale.set(2.2, 0.7, 1);
     group.add(plate);
 
-    const vis: EntityVisual = { group, body, plate, canvas, ctx: canvas.getContext("2d")!, lastHp: e.hp };
+    const vis: EntityVisual = { group, plate, canvas, ctx: canvas.getContext("2d")!, lastHp: e.hp };
     this.drawPlate(vis, e);
     return vis;
   }
@@ -333,11 +321,18 @@ export class Renderer {
   /** Entity under the crosshair (screen center), or null. */
   pickEntity(maxDist = 12): { id: string; kind: string; dist: number } | null {
     this.raycaster.setFromCamera(this.center, this.camera);
-    const bodies = [...this.entityVisuals.values()].map((v) => v.body);
-    const hits = this.raycaster.intersectObjects(bodies, false);
-    if (!hits.length || hits[0].distance > maxDist) return null;
-    const o = hits[0].object;
-    return { id: o.userData.entityId, kind: o.userData.entityKind, dist: hits[0].distance };
+    const groups = [...this.entityVisuals.values()].map((v) => v.group);
+    const hits = this.raycaster.intersectObjects(groups, true);
+    for (const h of hits) {
+      if (h.distance > maxDist) break;
+      // Walk up to the entity group (which carries the id/kind).
+      let o: THREE.Object3D | null = h.object;
+      while (o) {
+        if (o.userData.entityId) return { id: o.userData.entityId, kind: o.userData.entityKind, dist: h.distance };
+        o = o.parent;
+      }
+    }
+    return null;
   }
 
   /** Float a damage number above a position. */
