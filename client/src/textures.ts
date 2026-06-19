@@ -27,11 +27,11 @@ function buildAtlas(): THREE.CanvasTexture {
 export const ATLAS = buildAtlas();
 
 // Materials shared by all chunk meshes.
-export const opaqueMaterial = new THREE.MeshLambertMaterial({ map: ATLAS });
+export const opaqueMaterial = new THREE.MeshLambertMaterial({ map: ATLAS, vertexColors: true }); // vertexColors carry AO
 export const glowMaterial = new THREE.MeshBasicMaterial({ map: ATLAS }); // self-lit
 export const waterMaterial = new THREE.MeshLambertMaterial({
   map: ATLAS,
   transparent: true,
-  opacity: 0.78,
+  opacity: 0.72,
   depthWrite: false,
 });

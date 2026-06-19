@@ -23,8 +23,9 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
 - Procedurally generated voxel world (seeded terrain, hills, lakes, trees, ore,
   plus mystical mossy stone, glowing runestone and deep Aether crystals).
 - Streamed chunks rendered with face-culled meshing, procedurally generated
-  textures (built on a canvas — still no image assets), scene lighting, and a
-  twilight "mystical" palette. Crystals and runes are self-lit.
+  textures (built on a canvas — still no image assets), scene lighting with
+  per-vertex ambient occlusion, a gradient sky dome, lowered translucent water,
+  soft contact shadows, and a twilight palette. Crystals and runes are self-lit.
 - First-person controller with gravity, jumping, and voxel collision.
 - **Tool-gated, timed mining:** hold to break; harder blocks take longer and
   need the right tool (hatchet for wood, pickaxe for stone/ore, shovel for

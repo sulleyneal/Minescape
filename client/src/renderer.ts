@@ -37,6 +37,7 @@ export class Renderer {
   private raycaster = new THREE.Raycaster();
   private center = new THREE.Vector2(0, 0);
   private splats: { sprite: THREE.Sprite; born: number }[] = [];
+  private sky!: THREE.Mesh;
 
   constructor(canvas: HTMLCanvasElement, private world: ClientWorld) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -45,6 +46,7 @@ export class Renderer {
 
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, 48, 150);
+    this.scene.add(this.makeSky());
 
     // Lighting: sky/ground hemisphere + a warm sun + gentle violet ambient.
     // Tuned so shaded sides/undersides stay readable rather than murky.
@@ -154,6 +156,7 @@ export class Renderer {
   private rebuildAvatar(vis: PlayerVisual): void {
     const { group, skin, gear } = vis;
     group.clear();
+    group.add(this.makeBlob(0.45));
     const bodyColor = gear.body ?? skin.body;
     const legColor = gear.legs ?? "#33373f";
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.3, 0.4), new THREE.MeshLambertMaterial({ color: bodyColor }));
@@ -228,15 +231,29 @@ export class Renderer {
   private makeEntity(e: EntitySnapshot): EntityVisual {
     const group = new THREE.Group();
     const color = new THREE.Color(e.kind === "npc" ? this.npcColor(e.type) : this.monsterColor(e.type));
+    const dark = color.clone().multiplyScalar(0.7);
     const scale = e.kind === "npc" ? 1 : 0.9;
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.6 * scale, 1.6 * scale, 0.6 * scale),
-      new THREE.MeshLambertMaterial({ color }),
-    );
-    body.position.y = 0.8 * scale;
+    const mat = new THREE.MeshLambertMaterial({ color });
+    const legMat = new THREE.MeshLambertMaterial({ color: dark });
+
+    group.add(this.makeBlob(0.45 * scale));
+
+    // Legs, torso and head give a clearer silhouette than a single box.
+    for (const dx of [-0.16, 0.16]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.5 * scale, 0.25 * scale), legMat);
+      leg.position.set(dx * scale, 0.25 * scale, 0);
+      group.add(leg);
+    }
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.8 * scale, 0.4 * scale), mat);
+    body.position.y = 0.9 * scale;
     body.userData.entityId = e.id;
     body.userData.entityKind = e.kind;
     group.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45 * scale, 0.45 * scale, 0.45 * scale), mat);
+    head.position.y = 1.55 * scale;
+    head.userData.entityId = e.id;
+    head.userData.entityKind = e.kind;
+    group.add(head);
 
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -244,13 +261,42 @@ export class Renderer {
     const plate = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }),
     );
-    plate.position.y = 1.9 * scale;
+    plate.position.y = 2.1 * scale;
     plate.scale.set(2.2, 0.7, 1);
     group.add(plate);
 
     const vis: EntityVisual = { group, body, plate, canvas, ctx: canvas.getContext("2d")!, lastHp: e.hp };
     this.drawPlate(vis, e);
     return vis;
+  }
+
+  /** A large gradient sky dome (deep blue overhead fading to the horizon). */
+  private makeSky(): THREE.Mesh {
+    const geo = new THREE.SphereGeometry(420, 24, 16);
+    const pos = geo.attributes.position;
+    const top = new THREE.Color(0x4f6bbd);
+    const horizon = new THREE.Color(SKY);
+    const colors: number[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const t = Math.max(0, Math.min(1, pos.getY(i) / 420));
+      const c = horizon.clone().lerp(top, Math.pow(t, 0.6));
+      colors.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const sky = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    this.sky = sky;
+    return sky;
+  }
+
+  /** A soft translucent disc on the ground to anchor a character (cheap shadow). */
+  private makeBlob(radius: number): THREE.Mesh {
+    const blob = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 16),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false }),
+    );
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = 0.03;
+    return blob;
   }
 
   private drawPlate(vis: EntityVisual, e: EntitySnapshot): void {
@@ -338,6 +384,7 @@ export class Renderer {
 
   render(): void {
     this.updateSplats();
+    this.sky.position.copy(this.camera.position); // keep the dome centered on us
     this.renderer.render(this.scene, this.camera);
   }
 }
