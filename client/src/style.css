@@ -468,6 +468,27 @@ body {
   background: #3a2f1c;
 }
 
+/* ---- Equipment ---- */
+#equipment {
+  min-width: 280px;
+}
+.equip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 5px 0;
+}
+.equip-label {
+  font-size: 13px;
+  color: #e8dcc0;
+}
+#equip-bonuses {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffd24a;
+}
+
 /* ---- Death overlay ---- */
 #death {
   text-align: center;

@@ -46,6 +46,9 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
 - **Combat:** roaming monsters per biome (goblins, wolves, scorpions, skeletons),
   click-to-attack tick combat, health, death/respawn, and loot drops. Train
   Attack/Strength/Hitpoints by fighting.
+- **Equipment & armor:** equip weapons (Attack/Strength) and Bronze/Iron/Aether
+  armor (Defence) into dedicated slots — worn gear, not just carried, drives
+  combat and shows on your avatar. Buy bronze gear, smith iron, attune Aether.
 - **Town with NPCs:** a banker (store items beyond your 28 slots), a shopkeeper
   (buy/sell with coins), and a quest giver.
 - **Quests:** accept "The Goblin Menace", track kills, and claim a reward.

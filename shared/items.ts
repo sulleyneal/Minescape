@@ -3,12 +3,8 @@
 // break-time maths (see tools.ts).
 
 import { BlockType } from "./blocks";
+import type { EquipStats } from "./equipment";
 import { ToolStats, ToolType } from "./tools";
-
-export interface WeaponStats {
-  attack: number;
-  strength: number;
-}
 
 export interface ItemDef {
   id: string;
@@ -22,8 +18,8 @@ export interface ItemDef {
   icon?: string;
   /** Present on tools; drives what they can break and how fast. */
   tool?: ToolStats;
-  /** Present on weapons; adds to combat accuracy/damage when carried. */
-  weapon?: WeaponStats;
+  /** Present on weapons/armor; equip slot + combat bonuses. */
+  equip?: EquipStats;
   /** Shop base value in coins (for buying/selling). */
   value?: number;
 }
@@ -50,10 +46,24 @@ export const ITEMS: Record<string, ItemDef> = {
   iron_bar: { id: "iron_bar", name: "Iron Bar", stackable: true, color: "#b0b0b8", icon: "🔩", value: 20 },
   hide: { id: "hide", name: "Beast Hide", stackable: true, color: "#8a5a3a", icon: "🟫", value: 5 },
 
-  // Weapons (carried = used; best one applies)
-  bronze_sword: { id: "bronze_sword", name: "Bronze Sword", stackable: false, color: "#9a7b4f", icon: "🗡️", weapon: { attack: 2, strength: 2 }, value: 25 },
-  iron_sword: { id: "iron_sword", name: "Iron Sword", stackable: false, color: "#c8c8d0", icon: "🗡️", weapon: { attack: 5, strength: 5 }, value: 80 },
-  aether_sword: { id: "aether_sword", name: "Aether Blade", stackable: false, color: "#8fdcef", icon: "⚔️", weapon: { attack: 12, strength: 12 }, value: 400 },
+  // Weapons (equip to wield)
+  bronze_sword: { id: "bronze_sword", name: "Bronze Sword", stackable: false, color: "#9a7b4f", icon: "🗡️", equip: { slot: "weapon", attack: 2, strength: 2, reqAttack: 1 }, value: 25 },
+  iron_sword: { id: "iron_sword", name: "Iron Sword", stackable: false, color: "#c8c8d0", icon: "🗡️", equip: { slot: "weapon", attack: 5, strength: 5, reqAttack: 10 }, value: 80 },
+  aether_sword: { id: "aether_sword", name: "Aether Blade", stackable: false, color: "#8fdcef", icon: "⚔️", equip: { slot: "weapon", attack: 12, strength: 12, reqAttack: 30 }, value: 400 },
+
+  // Armor (equip for Defence). Tiers: Bronze / Iron / Aether.
+  bronze_helm: { id: "bronze_helm", name: "Bronze Helm", stackable: false, color: "#9a7b4f", icon: "⛑️", equip: { slot: "helmet", defence: 2, reqDefence: 1 }, value: 20 },
+  bronze_body: { id: "bronze_body", name: "Bronze Platebody", stackable: false, color: "#9a7b4f", icon: "🦺", equip: { slot: "body", defence: 4, reqDefence: 1 }, value: 40 },
+  bronze_legs: { id: "bronze_legs", name: "Bronze Platelegs", stackable: false, color: "#9a7b4f", icon: "👖", equip: { slot: "legs", defence: 3, reqDefence: 1 }, value: 30 },
+  bronze_shield: { id: "bronze_shield", name: "Bronze Shield", stackable: false, color: "#9a7b4f", icon: "🛡️", equip: { slot: "shield", defence: 3, reqDefence: 1 }, value: 30 },
+  iron_helm: { id: "iron_helm", name: "Iron Helm", stackable: false, color: "#c8c8d0", icon: "⛑️", equip: { slot: "helmet", defence: 5, reqDefence: 10 }, value: 70 },
+  iron_body: { id: "iron_body", name: "Iron Platebody", stackable: false, color: "#c8c8d0", icon: "🦺", equip: { slot: "body", defence: 9, reqDefence: 10 }, value: 140 },
+  iron_legs: { id: "iron_legs", name: "Iron Platelegs", stackable: false, color: "#c8c8d0", icon: "👖", equip: { slot: "legs", defence: 7, reqDefence: 10 }, value: 110 },
+  iron_shield: { id: "iron_shield", name: "Iron Shield", stackable: false, color: "#c8c8d0", icon: "🛡️", equip: { slot: "shield", defence: 6, reqDefence: 10 }, value: 100 },
+  aether_helm: { id: "aether_helm", name: "Aether Helm", stackable: false, color: "#8fdcef", icon: "⛑️", equip: { slot: "helmet", defence: 12, reqDefence: 30 }, value: 300 },
+  aether_body: { id: "aether_body", name: "Aether Platebody", stackable: false, color: "#8fdcef", icon: "🦺", equip: { slot: "body", defence: 20, reqDefence: 30 }, value: 600 },
+  aether_legs: { id: "aether_legs", name: "Aether Platelegs", stackable: false, color: "#8fdcef", icon: "👖", equip: { slot: "legs", defence: 16, reqDefence: 30 }, value: 500 },
+  aether_shield: { id: "aether_shield", name: "Aether Shield", stackable: false, color: "#8fdcef", icon: "🛡️", equip: { slot: "shield", defence: 14, reqDefence: 30 }, value: 450 },
 
   // Tools (tier 1 Bronze, 2 Iron, 3 Crystal)
   bronze_pickaxe: { id: "bronze_pickaxe", name: "Bronze Pickaxe", stackable: false, color: "#9a7b4f", icon: "⛏️", tool: { type: "pickaxe", tier: 1 } },
@@ -79,17 +89,6 @@ export function bestTool(inventory: (ItemStack | null)[], type: ToolType): ToolS
     if (!slot) continue;
     const t = ITEMS[slot.item]?.tool;
     if (t && t.type === type && (!best || t.tier > best.tier)) best = t;
-  }
-  return best;
-}
-
-/** Best weapon carried (highest combined bonus), for combat maths. Fists if none. */
-export function bestWeapon(inventory: (ItemStack | null)[]): WeaponStats {
-  let best: WeaponStats = { attack: 0, strength: 0 };
-  for (const slot of inventory) {
-    if (!slot) continue;
-    const w = ITEMS[slot.item]?.weapon;
-    if (w && w.attack + w.strength > best.attack + best.strength) best = w;
   }
   return best;
 }

@@ -2,6 +2,7 @@
 // Both client and server import these types so the contract stays in sync.
 
 import { BlockType } from "./blocks";
+import { CombatBonuses, Equipment, EquipSlot, Gear } from "./equipment";
 import { ItemStack } from "./items";
 import { Skills } from "./skills";
 
@@ -17,6 +18,7 @@ export interface PlayerState {
   pos: Vec3;
   yaw: number;
   skin: Skin;
+  gear?: Gear;
 }
 
 // ---- Client -> Server ----
@@ -110,6 +112,18 @@ export interface RespawnMsg {
   t: "respawn";
 }
 
+/** Equip an item from the given inventory slot index. */
+export interface EquipMsg {
+  t: "equip";
+  slot: number;
+}
+
+/** Unequip the item in the given equipment slot. */
+export interface UnequipMsg {
+  t: "unequip";
+  slot: EquipSlot;
+}
+
 export type ClientMessage =
   | JoinMsg
   | MoveMsg
@@ -122,7 +136,9 @@ export type ClientMessage =
   | DialogueChoiceMsg
   | BankActionMsg
   | ShopActionMsg
-  | RespawnMsg;
+  | RespawnMsg
+  | EquipMsg
+  | UnequipMsg;
 
 // ---- Server -> Client ----
 
@@ -136,6 +152,8 @@ export interface WelcomeMsg {
   skills: Skills;
   hp: number;
   maxHp: number;
+  equipment: Equipment;
+  bonuses: CombatBonuses;
 }
 
 export interface ChunkMsg {
@@ -201,6 +219,20 @@ export interface NoticeMsg {
 export interface LoginErrorMsg {
   t: "loginError";
   reason: string;
+}
+
+/** Current equipment + combat bonuses for the local player. */
+export interface EquipmentMsg {
+  t: "equipment";
+  equipment: Equipment;
+  bonuses: CombatBonuses;
+}
+
+/** Another player's worn-armor colors changed (for avatar display). */
+export interface PlayerGearMsg {
+  t: "playerGear";
+  id: string;
+  gear: Gear;
 }
 
 // ---- Entities (monsters + NPCs) ----
@@ -302,4 +334,6 @@ export type ServerMessage =
   | ShopMsg
   | CloseUiMsg
   | QuestMsg
-  | LoginErrorMsg;
+  | LoginErrorMsg
+  | EquipmentMsg
+  | PlayerGearMsg;

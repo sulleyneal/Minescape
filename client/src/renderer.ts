@@ -2,9 +2,17 @@
 // the block-selection highlight. Knows nothing about networking or input.
 
 import * as THREE from "three";
-import { EntitySnapshot } from "../../shared/protocol";
+import { Gear } from "../../shared/equipment";
+import { EntitySnapshot, Skin } from "../../shared/protocol";
 import { ClientWorld } from "./world";
 import { buildChunkMeshes, ChunkMeshes } from "./chunkMesher";
+
+interface PlayerVisual {
+  group: THREE.Group;
+  name: string;
+  skin: Skin;
+  gear: Gear;
+}
 
 interface EntityVisual {
   group: THREE.Group;
@@ -23,7 +31,7 @@ export class Renderer {
   readonly camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
   private chunkMeshes = new Map<string, ChunkMeshes>();
-  private playerMeshes = new Map<string, THREE.Group>();
+  private playerMeshes = new Map<string, PlayerVisual>();
   private entityVisuals = new Map<string, EntityVisual>();
   private highlight: THREE.LineSegments;
   private raycaster = new THREE.Raycaster();
@@ -105,50 +113,69 @@ export class Renderer {
     name: string,
     pos: { x: number; y: number; z: number },
     yaw: number,
-    skin?: { body: string; head: string },
+    skin?: Skin,
+    gear?: Gear,
   ): void {
-    let group = this.playerMeshes.get(id);
-    if (!group) {
-      group = this.makeAvatar(name, skin ?? { body: "#cc4444", head: "#e0b48a" });
-      this.playerMeshes.set(id, group);
-      this.scene.add(group);
+    let vis = this.playerMeshes.get(id);
+    if (!vis) {
+      vis = {
+        group: new THREE.Group(),
+        name,
+        skin: skin ?? { body: "#cc4444", head: "#e0b48a" },
+        gear: gear ?? {},
+      };
+      this.rebuildAvatar(vis);
+      this.playerMeshes.set(id, vis);
+      this.scene.add(vis.group);
+    } else if (skin || gear) {
+      if (skin) vis.skin = skin;
+      if (gear) vis.gear = gear;
+      this.rebuildAvatar(vis);
     }
-    group.position.set(pos.x, pos.y, pos.z);
-    group.rotation.y = yaw;
+    vis.group.position.set(pos.x, pos.y, pos.z);
+    vis.group.rotation.y = yaw;
+  }
+
+  setPlayerGear(id: string, gear: Gear): void {
+    const vis = this.playerMeshes.get(id);
+    if (!vis) return;
+    vis.gear = gear;
+    this.rebuildAvatar(vis);
   }
 
   removePlayer(id: string): void {
-    const group = this.playerMeshes.get(id);
-    if (!group) return;
-    this.scene.remove(group);
+    const vis = this.playerMeshes.get(id);
+    if (!vis) return;
+    this.scene.remove(vis.group);
     this.playerMeshes.delete(id);
   }
 
-  private makeAvatar(name: string, skin: { body: string; head: string }): THREE.Group {
-    const group = new THREE.Group();
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.6, 1.3, 0.4),
-      new THREE.MeshLambertMaterial({ color: skin.body }),
-    );
+  /** (Re)build an avatar's meshes from its current skin + worn gear. */
+  private rebuildAvatar(vis: PlayerVisual): void {
+    const { group, skin, gear } = vis;
+    group.clear();
+    const bodyColor = gear.body ?? skin.body;
+    const legColor = gear.legs ?? "#33373f";
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.3, 0.4), new THREE.MeshLambertMaterial({ color: bodyColor }));
     body.position.y = 1.05;
     group.add(body);
-    // Simple arms and legs in the body color, for a less blocky silhouette.
     for (const dx of [-0.4, 0.4]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), new THREE.MeshLambertMaterial({ color: skin.body }));
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), new THREE.MeshLambertMaterial({ color: bodyColor }));
       arm.position.set(dx, 1.1, 0);
       group.add(arm);
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 0.25), new THREE.MeshLambertMaterial({ color: 0x33373f }));
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 0.25), new THREE.MeshLambertMaterial({ color: legColor }));
       leg.position.set(dx * 0.45, 0.45, 0);
       group.add(leg);
     }
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 0.55, 0.55),
-      new THREE.MeshLambertMaterial({ color: skin.head }),
-    );
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), new THREE.MeshLambertMaterial({ color: skin.head }));
     head.position.y = 2.0;
     group.add(head);
-    group.add(this.makeNameTag(name));
-    return group;
+    if (gear.helmet) {
+      const helm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.3, 0.62), new THREE.MeshLambertMaterial({ color: gear.helmet }));
+      helm.position.y = 2.28;
+      group.add(helm);
+    }
+    group.add(this.makeNameTag(vis.name));
   }
 
   private makeNameTag(name: string): THREE.Sprite {

@@ -195,7 +195,8 @@ export class Game {
         this.hud.setInventory(m.inventory);
         this.hud.setSkills(m.skills);
         this.hud.setHealth(m.hp, m.maxHp);
-        for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw, p.skin);
+        this.hud.setEquipment(m.equipment, m.bonuses);
+        for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw, p.skin, p.gear);
         this.hud.notice("Welcome to Minescape! Press H for help.");
         break;
       case "chunk":
@@ -205,7 +206,7 @@ export class Game {
         this.world.setBlock(m.x, m.y, m.z, m.block);
         break;
       case "playerJoined":
-        this.renderer.upsertPlayer(m.player.id, m.player.name, m.player.pos, m.player.yaw, m.player.skin);
+        this.renderer.upsertPlayer(m.player.id, m.player.name, m.player.pos, m.player.yaw, m.player.skin, m.player.gear);
         this.hud.notice(`${m.player.name} joined.`);
         break;
       case "playerMoved":
@@ -259,6 +260,12 @@ export class Game {
         break;
       case "quest":
         this.hud.setQuest(m);
+        break;
+      case "equipment":
+        this.hud.setEquipment(m.equipment, m.bonuses);
+        break;
+      case "playerGear":
+        this.renderer.setPlayerGear(m.id, m.gear);
         break;
     }
   }

@@ -109,7 +109,10 @@ export const SHOP: { name: string; entries: ShopEntry[] } = {
   name: "Bram's General Store",
   entries: [
     { item: "bronze_sword", price: 25, stock: 10 },
-    { item: "iron_sword", price: 90, stock: 5 },
+    { item: "bronze_helm", price: 20, stock: 10 },
+    { item: "bronze_body", price: 40, stock: 10 },
+    { item: "bronze_legs", price: 30, stock: 10 },
+    { item: "bronze_shield", price: 30, stock: 10 },
     { item: "bronze_pickaxe", price: 20, stock: 10 },
     { item: "bronze_axe", price: 20, stock: 10 },
     { item: "cooked_fish", price: 10, stock: 50 },

@@ -3,6 +3,7 @@
 // no framework, just direct manipulation for a small fixed layout.
 
 import { INVENTORY_SLOTS, ITEMS, ItemStack } from "../../shared/items";
+import { CombatBonuses, Equipment, emptyEquipment, EQUIP_SLOTS, EquipSlot, SLOT_NAMES } from "../../shared/equipment";
 import { RECIPES } from "../../shared/gathering";
 import { ClientMessage } from "../../shared/protocol";
 import { levelForXp, levelProgress, SKILL_NAMES, SKILL_ORDER, Skills, SkillId, totalLevel, xpForLevel } from "../../shared/skills";
@@ -24,6 +25,8 @@ export class Hud {
   private bankItems: (ItemStack | null)[] = [];
   private shopName = "";
   private shopEntries: { item: string; price: number }[] = [];
+  private equipment: Equipment = emptyEquipment();
+  private bonuses: CombatBonuses = { attack: 0, strength: 0, defence: 0 };
 
   constructor(private root: HTMLElement, private send: (m: ClientMessage) => void) {
     root.innerHTML = TEMPLATE;
@@ -102,7 +105,8 @@ export class Hud {
         }
       }
       if (this.isModalOpen()) return; // don't toggle panels behind a modal
-      if (e.code === "KeyC") this.craftEl.classList.toggle("hidden");
+      if (e.code === "KeyC") this.togglePanel("#craft");
+      if (e.code === "KeyE") this.togglePanel("#equipment");
       if (e.code === "KeyH") help.classList.toggle("hidden");
       // Once the player starts moving, get the help out of the way.
       if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(e.code)) help.classList.add("hidden");
@@ -232,13 +236,18 @@ export class Hud {
         const label = def?.name ?? stack.item;
         slot.onmouseenter = () => this.showTip(label);
         slot.onmouseleave = () => this.hideTip();
+        const equippable = def?.equip !== undefined;
         const placeable = def?.placeBlock !== undefined;
         slot.onclick = () => {
+          if (equippable) {
+            this.send({ t: "equip", slot: i });
+            return;
+          }
           if (!placeable) return;
           this.selectedSlot = this.selectedSlot === i ? -1 : i;
           this.renderInventory();
         };
-        if (placeable) slot.classList.add("placeable");
+        if (equippable || placeable) slot.classList.add("placeable");
       }
       this.invEl.appendChild(slot);
     }
@@ -250,11 +259,56 @@ export class Hud {
     return this.root.querySelector(sel) as HTMLElement;
   }
 
+  /** Toggle a side panel; freeing the cursor when it opens so it's clickable. */
+  private togglePanel(sel: string): void {
+    const el = this.panel(sel);
+    el.classList.toggle("hidden");
+    if (!el.classList.contains("hidden")) document.exitPointerLock?.();
+  }
+
   setHealth(hp: number, maxHp: number): void {
     const bar = this.panel("#health");
     const frac = Math.max(0, Math.min(1, hp / maxHp));
     (bar.querySelector("i") as HTMLElement).style.width = `${frac * 100}%`;
     (bar.querySelector("span") as HTMLElement).textContent = `❤ ${Math.ceil(hp)}/${maxHp}`;
+  }
+
+  setEquipment(equipment: Equipment, bonuses: CombatBonuses): void {
+    this.equipment = equipment;
+    this.bonuses = bonuses;
+    this.renderEquipment();
+  }
+
+  private renderEquipment(): void {
+    const slotsEl = this.panel("#equip-slots");
+    slotsEl.innerHTML = "";
+    for (const slot of EQUIP_SLOTS) {
+      const id = this.equipment[slot];
+      const def = id ? ITEMS[id] : null;
+      const row = document.createElement("div");
+      row.className = "equip-row";
+      const box = document.createElement("div");
+      box.className = "slot" + (def ? " placeable" : "");
+      if (def) {
+        box.style.background = def.color;
+        if (def.icon) {
+          const ic = document.createElement("span");
+          ic.className = "icon";
+          ic.textContent = def.icon;
+          box.appendChild(ic);
+        }
+        box.title = `${def.name} (click to unequip)`;
+        box.onclick = () => this.send({ t: "unequip", slot });
+      }
+      const label = document.createElement("span");
+      label.className = "equip-label";
+      label.textContent = `${SLOT_NAMES[slot]}: ${def?.name ?? "—"}`;
+      row.appendChild(box);
+      row.appendChild(label);
+      slotsEl.appendChild(row);
+    }
+    this.panel("#equip-bonuses").textContent =
+      `Bonuses — Attack +${this.bonuses.attack}, Strength +${this.bonuses.strength}, Defence +${this.bonuses.defence}`;
   }
 
   setQuest(q: { id: string; name: string; status: string; progress: number; goal: number }): void {
@@ -470,6 +524,13 @@ const TEMPLATE = `
     <h3>Crafting (C)</h3>
     <div id="craft-list"></div>
   </div>
+  <div id="equipment" class="panel hidden">
+    <button class="panel-close" data-close="#equipment">×</button>
+    <h3>Equipment (E)</h3>
+    <div id="equip-slots"></div>
+    <div id="equip-bonuses"></div>
+    <div class="grid-label">Click a weapon/armor in your pack to equip it.</div>
+  </div>
   <div id="help" class="panel">
     <button class="panel-close" data-close="#help">×</button>
     <h3>How to play</h3>
@@ -483,7 +544,8 @@ const TEMPLATE = `
       <li>Explore: <b>plains, forests, deserts, snowy tundra and mountains</b>, each with their own creatures</li>
       <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge gear via Smithing in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>
-      <li><b>C</b> crafting · <b>Enter</b> chat · <b>H</b> help · <b>Esc</b> close menus</li>
+      <li>Click weapons/armor in your pack to <b>equip</b> them (Defence + damage). <b>E</b> shows your equipment</li>
+      <li><b>C</b> crafting · <b>E</b> equipment · <b>Enter</b> chat · <b>H</b> help · <b>Esc</b> close menus</li>
       <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft.</li>
       <li style="color:#ffd24a"><b>Close this:</b> click ×, press <b>H</b>, or just start moving.</li>
     </ul>

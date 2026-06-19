@@ -170,6 +170,16 @@ export const RECIPES: Recipe[] = [
     levelReq: 20,
     xp: 200,
   },
+  // Iron armor from bars.
+  { id: "smith_iron_helm", name: "Forge Iron Helm", inputs: [{ item: "iron_bar", count: 2 }], output: { item: "iron_helm", count: 1 }, skill: SkillId.Smithing, levelReq: 5, xp: 40 },
+  { id: "smith_iron_shield", name: "Forge Iron Shield", inputs: [{ item: "iron_bar", count: 3 }], output: { item: "iron_shield", count: 1 }, skill: SkillId.Smithing, levelReq: 7, xp: 60 },
+  { id: "smith_iron_legs", name: "Forge Iron Platelegs", inputs: [{ item: "iron_bar", count: 3 }], output: { item: "iron_legs", count: 1 }, skill: SkillId.Smithing, levelReq: 9, xp: 70 },
+  { id: "smith_iron_body", name: "Forge Iron Platebody", inputs: [{ item: "iron_bar", count: 5 }], output: { item: "iron_body", count: 1 }, skill: SkillId.Smithing, levelReq: 12, xp: 100 },
+  // Aether armor: attune iron pieces with crystals.
+  { id: "smith_aether_helm", name: "Attune Aether Helm", inputs: [{ item: "iron_helm", count: 1 }, { item: "crystal", count: 2 }], output: { item: "aether_helm", count: 1 }, skill: SkillId.Smithing, levelReq: 22, xp: 150 },
+  { id: "smith_aether_shield", name: "Attune Aether Shield", inputs: [{ item: "iron_shield", count: 1 }, { item: "crystal", count: 2 }], output: { item: "aether_shield", count: 1 }, skill: SkillId.Smithing, levelReq: 24, xp: 170 },
+  { id: "smith_aether_legs", name: "Attune Aether Platelegs", inputs: [{ item: "iron_legs", count: 1 }, { item: "crystal", count: 3 }], output: { item: "aether_legs", count: 1 }, skill: SkillId.Smithing, levelReq: 26, xp: 220 },
+  { id: "smith_aether_body", name: "Attune Aether Platebody", inputs: [{ item: "iron_body", count: 1 }, { item: "crystal", count: 4 }], output: { item: "aether_body", count: 1 }, skill: SkillId.Smithing, levelReq: 28, xp: 300 },
 ];
 
 export function recipeById(id: string): Recipe | undefined {

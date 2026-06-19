@@ -7,8 +7,9 @@ import { sanitizeSkin } from "../shared/appearance";
 import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
 import { MonsterDef, NPCS, QUESTS, questByGiver, SHOP } from "../shared/entities";
+import { emptyEquipment, Equipment, equipmentBonuses, EQUIP_SLOTS, EquipSlot, gearFromEquipment } from "../shared/equipment";
 import { nodeForBlock, recipeById } from "../shared/gathering";
-import { bestTool, bestWeapon, ITEMS } from "../shared/items";
+import { bestTool, ITEMS } from "../shared/items";
 import { ClientMessage, EntitySnapshot, ServerMessage, Skin, Vec3 } from "../shared/protocol";
 import { emptySkills, levelForXp, maxHitpoints, SkillId, Skills } from "../shared/skills";
 import { addItem, countItem, hasSpaceFor, Inventory, removeItem, startingInventory } from "./inventory";
@@ -40,6 +41,7 @@ interface Player {
   yaw: number;
   inventory: Inventory;
   bank: Inventory;
+  equipment: Equipment;
   skills: Skills;
   hp: number;
   dead: boolean;
@@ -122,6 +124,7 @@ export class GameServer {
       yaw: 0,
       inventory: startingInventory(),
       bank: new Array(BANK_SLOTS).fill(null),
+      equipment: emptyEquipment(),
       skills,
       hp: maxHitpoints(skills),
       dead: false,
@@ -217,6 +220,12 @@ export class GameServer {
       case "respawn":
         this.onRespawn(player);
         break;
+      case "equip":
+        this.onEquip(player, msg.slot);
+        break;
+      case "unequip":
+        this.onUnequip(player, msg.slot);
+        break;
     }
   }
 
@@ -262,11 +271,13 @@ export class GameServer {
       spawn: player.pos,
       players: [...this.players.values()]
         .filter((p) => p.id !== player.id && p.loggedIn)
-        .map((p) => ({ id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, skin: p.skin })),
+        .map((p) => ({ id: p.id, name: p.name, pos: p.pos, yaw: p.yaw, skin: p.skin, gear: gearFromEquipment(p.equipment) })),
       inventory: player.inventory,
       skills: player.skills,
       hp: player.hp,
       maxHp: maxHitpoints(player.skills),
+      equipment: player.equipment,
+      bonuses: equipmentBonuses(player.equipment),
     });
     this.streamChunks(player);
     this.sendEntities(player);
@@ -280,7 +291,7 @@ export class GameServer {
       }
     }
     this.broadcast(
-      { t: "playerJoined", player: { id: player.id, name: player.name, pos: player.pos, yaw: player.yaw, skin: player.skin } },
+      { t: "playerJoined", player: { id: player.id, name: player.name, pos: player.pos, yaw: player.yaw, skin: player.skin, gear: gearFromEquipment(player.equipment) } },
       player.id,
     );
     console.log(`[minescape] ${player.name} ${existing ? "logged in" : "registered"} (${this.players.size} online)`);
@@ -294,6 +305,7 @@ export class GameServer {
       salt: player.salt,
       passHash: player.passHash,
       skin: player.skin,
+      equipment: player.equipment,
       skills: player.skills,
       inventory: player.inventory,
       bank: player.bank,
@@ -314,6 +326,7 @@ export class GameServer {
     player.salt = s.salt;
     player.passHash = s.passHash;
     if (s.skin) player.skin = s.skin;
+    if (s.equipment) player.equipment = { ...emptyEquipment(), ...s.equipment };
     // Merge skills so characters saved before a new skill existed still load.
     player.skills = { ...emptySkills(), ...s.skills };
     player.inventory = padSlots(s.inventory, player.inventory.length);
@@ -477,11 +490,11 @@ export class GameServer {
     player.lastAttackTick = this.tick;
     m.targetPlayerId = player.id; // it fights back
 
-    const weapon = bestWeapon(player.inventory);
-    const atk = levelForXp(player.skills[SkillId.Attack]) + weapon.attack;
-    const str = levelForXp(player.skills[SkillId.Strength]);
+    const bonus = equipmentBonuses(player.equipment);
+    const atk = levelForXp(player.skills[SkillId.Attack]) + bonus.attack;
+    const str = levelForXp(player.skills[SkillId.Strength]) + bonus.strength;
     const hitChance = Math.max(0.3, Math.min(0.95, 0.62 + (atk - m.def.defence) * 0.05));
-    const maxHit = 1 + Math.floor((str - 1) / 3) + Math.floor(weapon.strength / 2);
+    const maxHit = 1 + Math.floor((str - 1) / 3);
     // Bias rolls upward a little so hits rarely splat 0 once you connect.
     const dmg = Math.random() < hitChance ? 1 + Math.floor(Math.random() * maxHit) : 0;
 
@@ -721,6 +734,53 @@ export class GameServer {
     this.send(player, { t: "inventory", inventory: player.inventory });
   }
 
+  // ---- Equipment ----
+
+  private onEquip(player: Player, invSlot: number): void {
+    const stack = player.inventory[invSlot];
+    if (!stack) return;
+    const def = ITEMS[stack.item];
+    const eq = def?.equip;
+    if (!eq) {
+      this.send(player, { t: "notice", text: `You can't equip ${def?.name ?? "that"}.` });
+      return;
+    }
+    if (eq.reqAttack && levelForXp(player.skills[SkillId.Attack]) < eq.reqAttack) {
+      this.send(player, { t: "notice", text: `You need Attack level ${eq.reqAttack} to wield that.` });
+      return;
+    }
+    if (eq.reqDefence && levelForXp(player.skills[SkillId.Defence]) < eq.reqDefence) {
+      this.send(player, { t: "notice", text: `You need Defence level ${eq.reqDefence} to wear that.` });
+      return;
+    }
+    const previous = player.equipment[eq.slot];
+    // Take the item out of the pack (frees a slot for any swapped-out gear).
+    removeItem(player.inventory, stack.item, 1);
+    if (previous) addItem(player.inventory, previous, 1);
+    player.equipment[eq.slot] = stack.item;
+    this.afterEquipChange(player);
+    this.send(player, { t: "notice", text: `You equip the ${def.name}.` });
+  }
+
+  private onUnequip(player: Player, slot: EquipSlot): void {
+    const current = player.equipment[slot];
+    if (!current) return;
+    if (!hasSpaceFor(player.inventory, current)) {
+      this.send(player, { t: "notice", text: "Your inventory is full." });
+      return;
+    }
+    addItem(player.inventory, current, 1);
+    player.equipment[slot] = null;
+    this.afterEquipChange(player);
+  }
+
+  private afterEquipChange(player: Player): void {
+    this.send(player, { t: "inventory", inventory: player.inventory });
+    this.send(player, { t: "equipment", equipment: player.equipment, bonuses: equipmentBonuses(player.equipment) });
+    // Tell other clients about the worn-armor colors for avatar display.
+    this.broadcast({ t: "playerGear", id: player.id, gear: gearFromEquipment(player.equipment) }, player.id);
+  }
+
   // ---- Entity snapshots ----
 
   private sendEntities(player: Player): void {
@@ -834,8 +894,8 @@ export class GameServer {
           m.yaw = Math.atan2(target.pos.x - m.pos.x, target.pos.z - m.pos.z);
           if (this.tick - m.lastAttackTick >= m.def.attackTicks) {
             m.lastAttackTick = this.tick;
-            const defLevel = levelForXp(target.skills[SkillId.Defence]);
-            const hitChance = Math.max(0.1, Math.min(0.9, 0.5 + (m.def.attack - defLevel) * 0.04));
+            const defLevel = levelForXp(target.skills[SkillId.Defence]) + equipmentBonuses(target.equipment).defence;
+            const hitChance = Math.max(0.05, Math.min(0.9, 0.5 + (m.def.attack - defLevel) * 0.04));
             const dmg = Math.random() < hitChance ? randInt(m.def.maxHit) : 0;
             this.applyPlayerDamage(target, dmg, m.def);
           }

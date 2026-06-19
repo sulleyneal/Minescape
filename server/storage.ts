@@ -5,6 +5,7 @@
 import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import pg from "pg";
+import { Equipment } from "../shared/equipment";
 import { ItemStack } from "../shared/items";
 import { Skin, Vec3 } from "../shared/protocol";
 import { Skills } from "../shared/skills";
@@ -24,6 +25,7 @@ export interface PlayerSave {
   salt: string | null;
   passHash: string | null;
   skin?: Skin;
+  equipment?: Equipment;
   skills: Skills;
   inventory: (ItemStack | null)[];
   bank: (ItemStack | null)[];
