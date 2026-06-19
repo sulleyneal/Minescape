@@ -2,12 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Minescape</title>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
+
+    <div id="rotate" class="hidden">
+      <div class="rotate-card">
+        <div class="rotate-icon">📱⟳</div>
+        <h2>Rotate your device</h2>
+        <p>Minescape plays best in landscape.</p>
+        <button id="rotate-anyway">Continue in portrait</button>
+      </div>
+    </div>
 
     <div id="start">
       <div class="start-card">

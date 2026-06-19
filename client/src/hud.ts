@@ -45,6 +45,14 @@ export class Hud {
     this.renderCraftGrid();
     this.bindChat();
     this.bindToggles();
+
+    // On touch, collapse the skills panel by default so it clears the joystick.
+    if (window.matchMedia?.("(pointer: coarse)").matches) {
+      const panelLeft = root.querySelector("#panel-left") as HTMLElement;
+      panelLeft.classList.add("collapsed");
+      panelLeft.style.pointerEvents = "auto";
+      panelLeft.addEventListener("click", () => panelLeft.classList.toggle("collapsed"));
+    }
   }
 
   // ---- input helpers ----
@@ -552,6 +560,7 @@ const TEMPLATE = `
   <div id="panel-left">
     <div id="title">MINESCAPE</div>
     <div id="total-level">Total level: 6</div>
+    <div class="tap-hint">tap to show skills</div>
     <div id="skills"></div>
   </div>
   <div id="health"><i></i><span>❤</span></div>

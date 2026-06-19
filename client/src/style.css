@@ -31,6 +31,44 @@ body {
   display: none !important;
 }
 
+/* ---- Rotate-to-landscape prompt ---- */
+#rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #2c3e50, #11161d);
+  text-align: center;
+  color: #fff;
+}
+.rotate-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+  animation: rotatehint 1.6s ease-in-out infinite;
+}
+@keyframes rotatehint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-90deg); }
+}
+#rotate h2 {
+  color: #ffd24a;
+  letter-spacing: 2px;
+}
+#rotate p {
+  color: #cfd8e3;
+  margin: 8px 0 18px;
+}
+#rotate-anyway {
+  padding: 8px 18px;
+  font-size: 13px;
+  color: #cfd8e3;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #5a4a2a;
+  border-radius: 6px;
+}
+
 /* ---- Start overlay ---- */
 #start {
   position: fixed;
@@ -169,6 +207,22 @@ body {
   letter-spacing: 3px;
   color: #ffd24a;
   text-shadow: 2px 2px 0 #5a3a00;
+}
+/* On touch, the skills list collapses so it doesn't sit under the joystick. */
+#panel-left.collapsed {
+  pointer-events: auto;
+  cursor: pointer;
+}
+#panel-left.collapsed #skills {
+  display: none;
+}
+#panel-left .tap-hint {
+  display: none;
+  font-size: 10px;
+  color: #9aa6b4;
+}
+#panel-left.collapsed .tap-hint {
+  display: block;
 }
 #total-level {
   font-size: 12px;

@@ -11,8 +11,42 @@ const nameInput = document.getElementById("name") as HTMLInputElement;
 const passwordInput = document.getElementById("password") as HTMLInputElement;
 const playBtn = document.getElementById("play") as HTMLButtonElement;
 const errorEl = document.getElementById("start-error") as HTMLElement;
+const rotateOverlay = document.getElementById("rotate") as HTMLElement;
 
 nameInput.value = localStorage.getItem("minescape-name") ?? "";
+
+// ---- Orientation: nudge mobile players into landscape ----
+function isTouch(): boolean {
+  return window.matchMedia?.("(pointer: coarse)").matches ?? false;
+}
+let allowPortrait = false;
+function checkOrientation(): void {
+  const portrait = window.matchMedia("(orientation: portrait)").matches;
+  rotateOverlay.classList.toggle("hidden", !(isTouch() && portrait && !allowPortrait));
+}
+window.addEventListener("resize", checkOrientation);
+window.addEventListener("orientationchange", checkOrientation);
+(document.getElementById("rotate-anyway") as HTMLElement).addEventListener("click", () => {
+  allowPortrait = true;
+  checkOrientation();
+});
+checkOrientation();
+
+/** Best-effort: go fullscreen + lock to landscape (works on Android Chrome;
+ *  iOS Safari ignores it, hence the rotate prompt as a fallback). */
+async function tryLandscape(): Promise<void> {
+  if (!isTouch()) return;
+  try {
+    await document.documentElement.requestFullscreen?.();
+  } catch {
+    /* unsupported (e.g. iOS Safari) */
+  }
+  try {
+    await (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape");
+  } catch {
+    /* unsupported */
+  }
+}
 
 // ---- Skin picker ----
 const skin = {
@@ -51,6 +85,8 @@ async function boot(): Promise<void> {
   localStorage.setItem("minescape-name", name);
   errorEl.textContent = "";
   overlay.classList.add("hidden");
+  await tryLandscape(); // user gesture — required for fullscreen/orientation APIs
+  checkOrientation();
   const game = new Game(canvas, hudRoot, name, password, { ...skin });
   try {
     await game.start();
