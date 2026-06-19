@@ -937,7 +937,10 @@ export class GameServer {
         this.send(player, { t: "inventory", inventory: player.inventory });
         this.awardXp(player, node.skill, node.xp);
         this.send(player, { t: "notice", text: `You get some ${ITEMS[node.yields]?.name?.toLowerCase()}.` });
-        if (node.respawnTicks > 0) {
+        if (node.permanent) {
+          this.applyEdit(x, y, z, BlockType.Air); // recorded edit: stays gone across reloads
+          player.gathering = null;
+        } else if (node.respawnTicks > 0) {
           this.world.depleteNode(x, y, z, node.depletedBlock, node.respawnTicks, this.tick);
           this.broadcast({ t: "worldEdit", x, y, z, block: node.depletedBlock });
           player.gathering = null;

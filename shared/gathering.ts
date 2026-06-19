@@ -24,6 +24,9 @@ export interface GatherNode {
   baseChance: number;
   /** Tool needed to gather (axe to chop, pickaxe to mine; "hand" = none). */
   tool: ToolType;
+  /** If true, the block is removed for good when gathered (no respawn) — used
+   *  for trees so a chopped tree stays chopped, Minecraft-style. */
+  permanent?: boolean;
 }
 
 export const GATHER_NODES: GatherNode[] = [
@@ -34,9 +37,10 @@ export const GATHER_NODES: GatherNode[] = [
     xp: 25,
     yields: "logs",
     depletedBlock: BlockType.Air,
-    respawnTicks: 45, // ~27s; trees are renewable but shouldn't pop back instantly
+    respawnTicks: 0,
     baseChance: 0.35,
     tool: "axe",
+    permanent: true, // chopped logs are gone for good (Minecraft-style)
   },
   {
     block: BlockType.MossStone,
