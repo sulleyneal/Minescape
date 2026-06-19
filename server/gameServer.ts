@@ -319,7 +319,7 @@ export class GameServer {
   }
 
   /** Sync online players into accounts and write the save. Safe to call often. */
-  saveNow(): void {
+  async saveNow(): Promise<void> {
     for (const player of this.players.values()) {
       if (player.loggedIn && player.accountKey) this.accounts.set(player.accountKey, this.toSave(player));
     }
@@ -330,7 +330,7 @@ export class GameServer {
       world: this.world.exportEdits(),
     };
     try {
-      this.storage.save(data);
+      await this.storage.save(data);
     } catch (err) {
       console.error("[minescape] save failed:", err);
     }

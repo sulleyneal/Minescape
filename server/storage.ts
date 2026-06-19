@@ -4,7 +4,10 @@
 
 import { createHash, randomBytes, scryptSync } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import pg from "pg";
 import { ItemStack } from "../shared/items";
+
+const { Pool } = pg;
 import { Vec3 } from "../shared/protocol";
 import { Skills } from "../shared/skills";
 
@@ -39,8 +42,10 @@ export interface SaveData {
 }
 
 export interface Storage {
-  load(): SaveData | null;
-  save(data: SaveData): void;
+  /** One-time setup (create tables, etc.). */
+  init(): Promise<void>;
+  load(): Promise<SaveData | null>;
+  save(data: SaveData): Promise<void>;
 }
 
 export function hashPassword(pw: string): { salt: string; hash: string } | null {
@@ -61,7 +66,9 @@ export function verifyPassword(pw: string, salt: string | null, hash: string | n
 export class FileStorage implements Storage {
   constructor(private path: string) {}
 
-  load(): SaveData | null {
+  async init(): Promise<void> {}
+
+  async load(): Promise<SaveData | null> {
     if (!existsSync(this.path)) return null;
     try {
       const data = JSON.parse(readFileSync(this.path, "utf8")) as SaveData;
@@ -76,10 +83,50 @@ export class FileStorage implements Storage {
     }
   }
 
-  save(data: SaveData): void {
+  async save(data: SaveData): Promise<void> {
     // Atomic write: temp file then rename, so a crash mid-write can't corrupt the save.
     const tmp = `${this.path}.tmp`;
     writeFileSync(tmp, JSON.stringify(data));
     renameSync(tmp, this.path);
+  }
+}
+
+/**
+ * Durable cloud storage in a single Postgres JSONB row. Activated automatically
+ * when DATABASE_URL is set (e.g. the database provisioned by render.yaml).
+ */
+export class PostgresStorage implements Storage {
+  private pool: pg.Pool;
+
+  constructor(url: string) {
+    // Render's internal database URL needs no SSL; external ones do — opt in
+    // with PGSSL=require.
+    this.pool = new Pool({
+      connectionString: url,
+      ssl: process.env.PGSSL === "require" ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+
+  async init(): Promise<void> {
+    await this.pool.query("CREATE TABLE IF NOT EXISTS minescape_save (id int PRIMARY KEY, data jsonb NOT NULL)");
+    console.log("[minescape] using Postgres storage");
+  }
+
+  async load(): Promise<SaveData | null> {
+    const res = await this.pool.query<{ data: SaveData }>("SELECT data FROM minescape_save WHERE id = 1");
+    if (res.rows.length === 0) return null;
+    const data = res.rows[0].data;
+    if (data.version !== SAVE_VERSION) {
+      console.warn(`[minescape] save version ${data.version} != ${SAVE_VERSION}; ignoring old save`);
+      return null;
+    }
+    return data;
+  }
+
+  async save(data: SaveData): Promise<void> {
+    await this.pool.query(
+      "INSERT INTO minescape_save (id, data) VALUES (1, $1::jsonb) ON CONFLICT (id) DO UPDATE SET data = $1::jsonb",
+      [JSON.stringify(data)],
+    );
   }
 }

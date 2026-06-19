@@ -14,12 +14,14 @@
     "start": "NODE_ENV=production tsx server/index.ts"
   },
   "dependencies": {
+    "pg": "^8.12.0",
     "three": "^0.164.0",
     "tsx": "^4.11.0",
     "ws": "^8.17.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "@types/pg": "^8.11.6",
     "@types/three": "^0.164.0",
     "@types/ws": "^8.5.10",
     "concurrently": "^8.2.2",

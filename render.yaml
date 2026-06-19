@@ -1,8 +1,17 @@
 # Render.com Blueprint. Deploy from your phone:
 #   1. Push this repo to GitHub (already done on your branch).
-#   2. On render.com: New + > Blueprint, pick this repo/branch.
-#   3. Render reads this file, builds, and gives you a public https URL.
+#   2. On render.com: New + > Blueprint, pick this repo/branch (or re-sync an
+#      existing Blueprint) and Apply.
+#   3. Render builds the web service AND provisions the Postgres database below,
+#      injecting DATABASE_URL so characters/world persist across deploys.
 # The free plan supports WebSockets and serves the client + game on one origin.
+
+databases:
+  - name: minescape-db
+    plan: free
+    databaseName: minescape
+    user: minescape
+
 services:
   - type: web
     name: minescape
@@ -14,6 +23,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Optional: pin a world seed so the map is the same every restart.
+      # Durable saves: Render injects the database connection string here, and
+      # the server uses Postgres automatically when DATABASE_URL is present.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: minescape-db
+          property: connectionString
+      # Optional: pin a world seed (otherwise it's saved on first run).
       # - key: SEED
       #   value: "12345"

@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { GameServer } from "./gameServer";
-import { FileStorage } from "./storage";
+import { FileStorage, PostgresStorage, Storage } from "./storage";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const SEED = Number(process.env.SEED ?? Math.floor(Math.random() * 1_000_000));
@@ -30,8 +30,13 @@ const MIME: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
 };
 
-const storage = new FileStorage(SAVE_PATH);
-const game = new GameServer(storage.load(), storage, SEED);
+// Use the Postgres database when one is configured (durable on cloud hosts),
+// otherwise fall back to a local JSON file.
+const storage: Storage = process.env.DATABASE_URL
+  ? new PostgresStorage(process.env.DATABASE_URL)
+  : new FileStorage(SAVE_PATH);
+await storage.init();
+const game = new GameServer(await storage.load(), storage, SEED);
 
 const httpServer = createServer(async (req, res) => {
   if (!hasClient) {
@@ -72,9 +77,9 @@ httpServer.listen(PORT, () => {
   if (hasClient) console.log(`[minescape] serving client from ${DIST}`);
 });
 
-function shutdown(): void {
+async function shutdown(): Promise<void> {
   console.log("\n[minescape] saving and shutting down");
-  game.saveNow();
+  await game.saveNow();
   httpServer.close(() => process.exit(0));
   // Failsafe in case sockets keep the server open.
   setTimeout(() => process.exit(0), 2000).unref();
