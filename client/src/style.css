@@ -643,23 +643,91 @@ body {
 
 /* ---- Equipment ---- */
 #equipment {
-  min-width: 280px;
+  min-width: 320px;
 }
 .equip-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 5px 0;
+  margin: 6px 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
 }
-.equip-label {
+.equip-row.empty {
+  opacity: 0.5;
+}
+.equip-info {
+  line-height: 1.25;
+}
+.equip-slotname {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #b9a87f;
+}
+.equip-item {
+  font-size: 14px;
+  color: #f0e6cc;
+}
+.equip-stats {
+  font-size: 12px;
+  color: #6fd08a;
+}
+.equip-req {
+  font-size: 11px;
+  color: #e0a85a;
+}
+#equip-bonuses {
+  margin-top: 12px;
+  border-top: 1px solid #5a4a2a;
+  padding-top: 8px;
   font-size: 13px;
   color: #e8dcc0;
 }
-#equip-bonuses {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: bold;
+#equip-bonuses .eb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+#equip-bonuses .eb-row b {
   color: #ffd24a;
+}
+#equip-bonuses .eb-row span:last-child {
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+#equip-bonuses .eb-legend {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #9b8e6e;
+}
+
+/* ---- On-screen toolbar (desktop) ---- */
+#toolbar {
+  position: fixed;
+  right: 12px;
+  bottom: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#toolbar button {
+  width: 46px;
+  height: 46px;
+  font-size: 22px;
+  background: rgba(20, 16, 8, 0.8);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+#toolbar button:hover {
+  border-color: #ffd24a;
+  background: rgba(40, 32, 16, 0.9);
+}
+@media (pointer: coarse) {
+  #toolbar { display: none; } /* touch UI has its own buttons */
 }
 
 /* ---- Death overlay ---- */

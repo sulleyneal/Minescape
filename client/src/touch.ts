@@ -29,6 +29,7 @@ export class TouchControls {
     wrap.innerHTML = `
       <div id="joystick"><div id="joy-knob"></div></div>
       <div id="touch-buttons">
+        <button class="tbtn" id="btn-equip" title="Equipment">🛡</button>
         <button class="tbtn" id="btn-craft" title="Crafting">⚒</button>
         <button class="tbtn" id="btn-jump" title="Jump">⤒</button>
         <button class="tbtn build" id="btn-build" title="Build">＋</button>
@@ -46,6 +47,7 @@ export class TouchControls {
       () => (this.controls.primaryHeld = false),
     );
     this.bindButton(wrap.querySelector("#btn-craft")!, () => this.hud.toggleCrafting());
+    this.bindButton(wrap.querySelector("#btn-equip")!, () => this.hud.toggleEquipment());
     // Panels are dismissed via their × buttons (wired in the HUD).
   }
 
