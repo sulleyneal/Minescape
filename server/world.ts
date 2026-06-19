@@ -7,6 +7,7 @@ import { Biome } from "../shared/biomes";
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from "../shared/constants";
 import { GATHER_NODES } from "../shared/gathering";
 import { fbm } from "./noise";
+import { villageAffectsChunk, villageFlatHeight, villageHeightAt, villageNoTree, villageStructure, villageSurface } from "./village";
 
 const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
@@ -39,9 +40,12 @@ export class World {
   private depleted: DepletedNode[] = [];
   /** Persistent player edits, per chunk, keyed by in-chunk index → block. */
   private editsByChunk = new Map<string, Map<number, BlockType>>();
+  /** Flat height the origin town sits on (computed once from the seed). */
+  private villageHeight: number;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
+    this.villageHeight = villageFlatHeight(this.rawHeightAt(0, 0));
   }
 
   getChunk(cx: number, cz: number): Uint8Array {
@@ -57,8 +61,8 @@ export class World {
     return chunk;
   }
 
-  /** Continuous terrain height, blended so biome borders don't form cliffs. */
-  heightAt(wx: number, wz: number): number {
+  /** Natural terrain height, blended so biome borders don't form cliffs. */
+  private rawHeightAt(wx: number, wz: number): number {
     const continent = fbm(this.seed, wx / 110, wz / 110, 4);
     const detail = fbm(this.seed + 7, wx / 22, wz / 22, 3);
     const mtn = fbm(this.seed + 320, wx / 150, wz / 150, 3);
@@ -66,6 +70,11 @@ export class World {
     const mountainBoost = peak * peak * 34;
     const h = SEA_LEVEL - 6 + continent * 22 + detail * 5 + mountainBoost;
     return Math.max(1, Math.min(WORLD_HEIGHT - 2, Math.floor(h)));
+  }
+
+  /** Surface height, flattened over the origin town's plaza. */
+  heightAt(wx: number, wz: number): number {
+    return villageHeightAt(wx, wz, this.rawHeightAt(wx, wz), this.villageHeight);
   }
 
   biomeAt(wx: number, wz: number): Biome {
@@ -99,6 +108,7 @@ export class World {
     const data = new Uint8Array(CHUNK_VOLUME);
     const baseX = cx * CHUNK_SIZE;
     const baseZ = cz * CHUNK_SIZE;
+    const village = villageAffectsChunk(baseX, baseZ);
 
     for (let lx = 0; lx < CHUNK_SIZE; lx++) {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
@@ -106,7 +116,8 @@ export class World {
         const wz = baseZ + lz;
         const biome = this.biomeAt(wx, wz);
         const height = this.heightAt(wx, wz);
-        const surface = this.surfaceBlock(biome, height);
+        const vSurface = village ? villageSurface(wx, wz) : null;
+        const surface = vSurface ?? this.surfaceBlock(biome, height);
         const subSurface = biome === Biome.Desert ? BlockType.Sand : BlockType.Dirt;
 
         for (let y = 0; y <= height; y++) {
@@ -128,13 +139,21 @@ export class World {
           data[idx(lx, y, lz)] = BlockType.Water;
         }
 
-        // Scatter trees per-biome on grass/snow above the waterline.
+        // Scatter trees per-biome on grass/snow above the waterline — but never
+        // over the town plaza, its roads, or buildings.
         const top = data[idx(lx, height, lz)];
         const density = TREE_DENSITY[biome];
-        if (density && (top === BlockType.Grass || top === BlockType.Snow) && height > SEA_LEVEL) {
+        if (density && (top === BlockType.Grass || top === BlockType.Snow) && height > SEA_LEVEL && !(village && villageNoTree(wx, wz))) {
           const r = fbm(this.seed + 99, wx * 1.7, wz * 1.7, 2);
           if (r > density && lx > 1 && lx < CHUNK_SIZE - 2 && lz > 1 && lz < CHUNK_SIZE - 2) {
             this.placeTree(data, lx, height + 1, lz);
+          }
+        }
+
+        // Raise the town's walls, roofs and beacon tower above the surface.
+        if (village) {
+          for (const s of villageStructure(wx, wz, height)) {
+            if (s.y > height && s.y < WORLD_HEIGHT) data[idx(lx, s.y, lz)] = s.block;
           }
         }
       }

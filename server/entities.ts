@@ -40,7 +40,7 @@ interface LairSpec {
 // Lairs sit further out the deadlier they are, so the world reads as a journey:
 // goblin camps ring the town, the mountain crypt is a long trek away.
 const LAIRS: LairSpec[] = [
-  { monster: "goblin", lairs: 3, packMin: 5, packMax: 7, minDist: 18, maxDist: 55 },
+  { monster: "goblin", lairs: 3, packMin: 5, packMax: 7, minDist: 28, maxDist: 60 },
   { monster: "wolf", lairs: 2, packMin: 4, packMax: 6, minDist: 40, maxDist: 80 },
   { monster: "scorpion", lairs: 2, packMin: 4, packMax: 6, minDist: 45, maxDist: 95 },
   { monster: "skeleton", lairs: 1, packMin: 4, packMax: 5, minDist: 60, maxDist: 110 },
