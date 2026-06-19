@@ -31,16 +31,29 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
   dirt/sand). Tiers — Bronze → Iron → Aether (crystal) — break faster.
 - Place blocks; every edit is synced to all players in real time.
 
+**Biomes**
+- Five procedurally distributed biomes — **plains, forest, desert, snowy
+  tundra, and mountains** — with their own surface blocks, tree cover, terrain
+  height, and monsters. (Preview with `npm i canvas && npx tsx tools/render-biomes.ts`.)
+
+![Biome map](./biome-map.png)
+
 **The RuneScape loop**
-- Skills with the **authentic RuneScape XP curve** (level 1–99).
-- Gathering nodes: chop **trees** (Woodcutting), mine **coal/iron/gold ore**
-  (Mining), and fish **water** (Fishing), each with level requirements and XP.
-- Resource nodes deplete and **respawn on a tick**, just like the real game.
-- A 28-slot inventory and simple crafting (logs → planks, cook raw fish).
-- Action notices ("You get some logs.") and level-up celebrations.
+- 10 skills on the **authentic RuneScape XP curve** (1–99): Attack, Strength,
+  Defence, Hitpoints, Woodcutting, Mining, Fishing, Smithing, Firemaking, Cooking.
+- Gathering nodes: chop **trees**, mine **ore**, fish **water** — each with level
+  and tool requirements; nodes deplete and respawn on a tick.
+- **Combat:** roaming monsters per biome (goblins, wolves, scorpions, skeletons),
+  click-to-attack tick combat, health, death/respawn, and loot drops. Train
+  Attack/Strength/Hitpoints by fighting.
+- **Town with NPCs:** a banker (store items beyond your 28 slots), a shopkeeper
+  (buy/sell with coins), and a quest giver.
+- **Quests:** accept "The Goblin Menace", track kills, and claim a reward.
+- **Smithing:** smelt ore into bars and forge swords; attune Aether gear with crystals.
+- A 28-slot inventory, a large bank, and crafting (planks, cooking, tools, weapons).
 
 **Multiplayer**
-- Up to 8 players in one world, with live avatars, name tags, and chat.
+- Up to 8 players in one world, with live avatars, name tags, shared monsters, and chat.
 
 ## Running it
 

@@ -58,7 +58,59 @@ export interface ChatMsg {
   text: string;
 }
 
-export type ClientMessage = JoinMsg | MoveMsg | BlockEditMsg | GatherMsg | CraftMsg | ChatMsg;
+/** Begin attacking an entity (by id). */
+export interface AttackMsg {
+  t: "attack";
+  id: string;
+}
+
+/** Talk to an NPC entity (by id), opening dialogue. */
+export interface TalkMsg {
+  t: "talk";
+  id: string;
+}
+
+/** Choose a dialogue option. */
+export interface DialogueChoiceMsg {
+  t: "dialogueChoice";
+  npc: string;
+  option: string;
+}
+
+export interface BankActionMsg {
+  t: "bankAction";
+  action: "deposit" | "withdraw" | "close";
+  /** Inventory slot (deposit) or item id (withdraw). */
+  slot?: number;
+  item?: string;
+  count: number;
+}
+
+export interface ShopActionMsg {
+  t: "shopAction";
+  action: "buy" | "sell" | "close";
+  item?: string;
+  slot?: number;
+  count: number;
+}
+
+export interface RespawnMsg {
+  t: "respawn";
+}
+
+export type ClientMessage =
+  | JoinMsg
+  | MoveMsg
+  | BlockEditMsg
+  | GatherMsg
+  | CraftMsg
+  | ChatMsg
+  | AttackMsg
+  | TalkMsg
+  | DialogueChoiceMsg
+  | BankActionMsg
+  | ShopActionMsg
+  | RespawnMsg;
 
 // ---- Server -> Client ----
 
@@ -70,6 +122,8 @@ export interface WelcomeMsg {
   players: PlayerState[];
   inventory: (ItemStack | null)[];
   skills: Skills;
+  hp: number;
+  maxHp: number;
 }
 
 export interface ChunkMsg {
@@ -131,6 +185,84 @@ export interface NoticeMsg {
   text: string;
 }
 
+// ---- Entities (monsters + NPCs) ----
+
+export interface EntitySnapshot {
+  id: string;
+  kind: "monster" | "npc";
+  type: string;
+  name: string;
+  pos: Vec3;
+  yaw: number;
+  hp: number;
+  maxHp: number;
+  level?: number;
+}
+
+/** Full snapshot of the entities near a player (replaces the client's set). */
+export interface EntitiesMsg {
+  t: "entities";
+  entities: EntitySnapshot[];
+}
+
+/** A damage number to float over a target ("" id = the local player). */
+export interface HitSplatMsg {
+  t: "hitsplat";
+  id: string;
+  dmg: number;
+}
+
+export interface HealthMsg {
+  t: "health";
+  hp: number;
+  maxHp: number;
+}
+
+export interface DeathMsg {
+  t: "death";
+}
+
+export interface RespawnedMsg {
+  t: "respawned";
+  spawn: Vec3;
+  hp: number;
+}
+
+// ---- Social / economy UIs ----
+
+export interface DialogueMsg {
+  t: "dialogue";
+  npc: string;
+  name: string;
+  text: string;
+  options: { id: string; label: string }[];
+}
+
+export interface BankMsg {
+  t: "bank";
+  items: (ItemStack | null)[];
+}
+
+export interface ShopMsg {
+  t: "shop";
+  name: string;
+  entries: { item: string; price: number }[];
+}
+
+export interface CloseUiMsg {
+  t: "closeUi";
+  ui: "bank" | "shop" | "dialogue";
+}
+
+export interface QuestMsg {
+  t: "quest";
+  id: string;
+  name: string;
+  status: "available" | "active" | "complete";
+  progress: number;
+  goal: number;
+}
+
 export type ServerMessage =
   | WelcomeMsg
   | ChunkMsg
@@ -141,4 +273,14 @@ export type ServerMessage =
   | InventoryMsg
   | SkillMsg
   | ChatBroadcastMsg
-  | NoticeMsg;
+  | NoticeMsg
+  | EntitiesMsg
+  | HitSplatMsg
+  | HealthMsg
+  | DeathMsg
+  | RespawnedMsg
+  | DialogueMsg
+  | BankMsg
+  | ShopMsg
+  | CloseUiMsg
+  | QuestMsg;

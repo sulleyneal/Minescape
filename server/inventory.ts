@@ -14,6 +14,8 @@ export function startingInventory(): Inventory {
   inv[0] = { item: "bronze_pickaxe", count: 1 };
   inv[1] = { item: "bronze_axe", count: 1 };
   inv[2] = { item: "bronze_shovel", count: 1 };
+  inv[3] = { item: "bronze_sword", count: 1 };
+  inv[4] = { item: "coins", count: 25 };
   return inv;
 }
 

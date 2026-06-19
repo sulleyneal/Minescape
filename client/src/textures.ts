@@ -3,7 +3,7 @@
 // "glow" blocks (crystals/runes), and translucent water.
 
 import * as THREE from "three";
-import { ATLAS_H, ATLAS_W, drawTile, TILE_INDEX } from "./atlasDraw";
+import { ATLAS_H, ATLAS_W, drawTile, NUM_TILES } from "./atlasDraw";
 
 export { BLOCK_TILES, tileUV, TILE_INDEX } from "./atlasDraw";
 
@@ -13,7 +13,7 @@ function buildAtlas(): THREE.CanvasTexture {
   canvas.height = ATLAS_H;
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
-  for (let i = 0; i <= TILE_INDEX.crystal; i++) drawTile(ctx, i);
+  for (let i = 0; i < NUM_TILES; i++) drawTile(ctx, i);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.magFilter = THREE.NearestFilter;

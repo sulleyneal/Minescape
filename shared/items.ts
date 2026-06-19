@@ -5,6 +5,11 @@
 import { BlockType } from "./blocks";
 import { ToolStats, ToolType } from "./tools";
 
+export interface WeaponStats {
+  attack: number;
+  strength: number;
+}
+
 export interface ItemDef {
   id: string;
   name: string;
@@ -17,6 +22,10 @@ export interface ItemDef {
   icon?: string;
   /** Present on tools; drives what they can break and how fast. */
   tool?: ToolStats;
+  /** Present on weapons; adds to combat accuracy/damage when carried. */
+  weapon?: WeaponStats;
+  /** Shop base value in coins (for buying/selling). */
+  value?: number;
 }
 
 export const ITEMS: Record<string, ItemDef> = {
@@ -32,8 +41,19 @@ export const ITEMS: Record<string, ItemDef> = {
   gold_ore: { id: "gold_ore", name: "Gold Ore", stackable: true, color: "#c7a847", icon: "🟡" },
   rune_shard: { id: "rune_shard", name: "Rune Shard", stackable: true, color: "#7b6cff", icon: "✨" },
   crystal: { id: "crystal", name: "Aether Crystal", placeBlock: BlockType.Crystal, stackable: true, color: "#8fdcef", icon: "💎" },
-  raw_fish: { id: "raw_fish", name: "Raw Fish", stackable: true, color: "#6fa3b5", icon: "🐟" },
-  cooked_fish: { id: "cooked_fish", name: "Cooked Fish", stackable: true, color: "#c98a4b", icon: "🍤" },
+  raw_fish: { id: "raw_fish", name: "Raw Fish", stackable: true, color: "#6fa3b5", icon: "🐟", value: 4 },
+  cooked_fish: { id: "cooked_fish", name: "Cooked Fish", stackable: true, color: "#c98a4b", icon: "🍤", value: 8 },
+
+  // Currency, combat drops, and smithing materials
+  coins: { id: "coins", name: "Coins", stackable: true, color: "#e0bb45", icon: "🪙", value: 1 },
+  bones: { id: "bones", name: "Bones", stackable: true, color: "#e8e4d0", icon: "🦴", value: 1 },
+  iron_bar: { id: "iron_bar", name: "Iron Bar", stackable: true, color: "#b0b0b8", icon: "🔩", value: 20 },
+  hide: { id: "hide", name: "Beast Hide", stackable: true, color: "#8a5a3a", icon: "🟫", value: 5 },
+
+  // Weapons (carried = used; best one applies)
+  bronze_sword: { id: "bronze_sword", name: "Bronze Sword", stackable: false, color: "#9a7b4f", icon: "🗡️", weapon: { attack: 2, strength: 2 }, value: 25 },
+  iron_sword: { id: "iron_sword", name: "Iron Sword", stackable: false, color: "#c8c8d0", icon: "🗡️", weapon: { attack: 5, strength: 5 }, value: 80 },
+  aether_sword: { id: "aether_sword", name: "Aether Blade", stackable: false, color: "#8fdcef", icon: "⚔️", weapon: { attack: 12, strength: 12 }, value: 400 },
 
   // Tools (tier 1 Bronze, 2 Iron, 3 Crystal)
   bronze_pickaxe: { id: "bronze_pickaxe", name: "Bronze Pickaxe", stackable: false, color: "#9a7b4f", icon: "⛏️", tool: { type: "pickaxe", tier: 1 } },
@@ -59,6 +79,17 @@ export function bestTool(inventory: (ItemStack | null)[], type: ToolType): ToolS
     if (!slot) continue;
     const t = ITEMS[slot.item]?.tool;
     if (t && t.type === type && (!best || t.tier > best.tier)) best = t;
+  }
+  return best;
+}
+
+/** Best weapon carried (highest combined bonus), for combat maths. Fists if none. */
+export function bestWeapon(inventory: (ItemStack | null)[]): WeaponStats {
+  let best: WeaponStats = { attack: 0, strength: 0 };
+  for (const slot of inventory) {
+    if (!slot) continue;
+    const w = ITEMS[slot.item]?.weapon;
+    if (w && w.attack + w.strength > best.attack + best.strength) best = w;
   }
   return best;
 }

@@ -3,11 +3,18 @@
 // receive chunk snapshots and individual edits.
 
 import { BlockType } from "../shared/blocks";
+import { Biome } from "../shared/biomes";
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from "../shared/constants";
 import { GATHER_NODES } from "../shared/gathering";
 import { fbm } from "./noise";
 
 const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
+
+const TREE_DENSITY: Partial<Record<Biome, number>> = {
+  [Biome.Forest]: 0.58,
+  [Biome.Plains]: 0.82,
+  [Biome.Tundra]: 0.86,
+};
 
 function chunkKey(cx: number, cz: number): string {
   return `${cx},${cz}`;
@@ -45,6 +52,44 @@ export class World {
     return chunk;
   }
 
+  /** Continuous terrain height, blended so biome borders don't form cliffs. */
+  heightAt(wx: number, wz: number): number {
+    const continent = fbm(this.seed, wx / 110, wz / 110, 4);
+    const detail = fbm(this.seed + 7, wx / 22, wz / 22, 3);
+    const mtn = fbm(this.seed + 320, wx / 150, wz / 150, 3);
+    const peak = Math.max(0, mtn - 0.5) / 0.5; // 0..1, only the highlands rise
+    const mountainBoost = peak * peak * 34;
+    const h = SEA_LEVEL - 6 + continent * 22 + detail * 5 + mountainBoost;
+    return Math.max(1, Math.min(WORLD_HEIGHT - 2, Math.floor(h)));
+  }
+
+  biomeAt(wx: number, wz: number): Biome {
+    const mtn = fbm(this.seed + 320, wx / 150, wz / 150, 3);
+    if (mtn > 0.72) return Biome.Mountains;
+    const temp = fbm(this.seed + 200, wx / 200, wz / 200, 3);
+    const moist = fbm(this.seed + 260, wx / 220, wz / 220, 3);
+    if (temp < 0.36) return Biome.Tundra;
+    if (temp > 0.66 && moist < 0.45) return Biome.Desert;
+    if (moist > 0.58) return Biome.Forest;
+    return Biome.Plains;
+  }
+
+  private surfaceBlock(biome: Biome, height: number): BlockType {
+    if (height <= SEA_LEVEL) return BlockType.Sand; // beaches / lake floors
+    switch (biome) {
+      case Biome.Desert:
+        return BlockType.Sand;
+      case Biome.Tundra:
+        return BlockType.Snow;
+      case Biome.Mountains:
+        if (height > SEA_LEVEL + 20) return BlockType.Snow;
+        if (height > SEA_LEVEL + 8) return BlockType.Stone;
+        return BlockType.Grass;
+      default:
+        return BlockType.Grass;
+    }
+  }
+
   private generateChunk(cx: number, cz: number): Uint8Array {
     const data = new Uint8Array(CHUNK_VOLUME);
     const baseX = cx * CHUNK_SIZE;
@@ -54,21 +99,19 @@ export class World {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
         const wx = baseX + lx;
         const wz = baseZ + lz;
-
-        // Blend two noise scales for rolling hills with occasional peaks.
-        const continent = fbm(this.seed, wx / 90, wz / 90, 4);
-        const detail = fbm(this.seed + 7, wx / 24, wz / 24, 3);
-        const h = Math.floor(SEA_LEVEL - 4 + continent * 26 + detail * 6);
-        const height = Math.max(1, Math.min(WORLD_HEIGHT - 1, h));
+        const biome = this.biomeAt(wx, wz);
+        const height = this.heightAt(wx, wz);
+        const surface = this.surfaceBlock(biome, height);
+        const subSurface = biome === Biome.Desert ? BlockType.Sand : BlockType.Dirt;
 
         for (let y = 0; y <= height; y++) {
           let block: BlockType;
           if (y === 0) {
             block = BlockType.Bedrock;
           } else if (y === height) {
-            block = height < SEA_LEVEL + 1 ? BlockType.Sand : BlockType.Grass;
+            block = surface;
           } else if (y > height - 4) {
-            block = BlockType.Dirt;
+            block = subSurface;
           } else {
             block = this.oreAt(wx, y, wz);
           }
@@ -80,10 +123,12 @@ export class World {
           data[idx(lx, y, lz)] = BlockType.Water;
         }
 
-        // Scatter trees on grass above the waterline.
-        if (data[idx(lx, height, lz)] === BlockType.Grass && height > SEA_LEVEL) {
+        // Scatter trees per-biome on grass/snow above the waterline.
+        const top = data[idx(lx, height, lz)];
+        const density = TREE_DENSITY[biome];
+        if (density && (top === BlockType.Grass || top === BlockType.Snow) && height > SEA_LEVEL) {
           const r = fbm(this.seed + 99, wx * 1.7, wz * 1.7, 2);
-          if (r > 0.82 && lx > 1 && lx < CHUNK_SIZE - 2 && lz > 1 && lz < CHUNK_SIZE - 2) {
+          if (r > density && lx > 1 && lx < CHUNK_SIZE - 2 && lz > 1 && lz < CHUNK_SIZE - 2) {
             this.placeTree(data, lx, height + 1, lz);
           }
         }

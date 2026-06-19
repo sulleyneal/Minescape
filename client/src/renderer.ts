@@ -2,8 +2,18 @@
 // the block-selection highlight. Knows nothing about networking or input.
 
 import * as THREE from "three";
+import { EntitySnapshot } from "../../shared/protocol";
 import { ClientWorld } from "./world";
 import { buildChunkMeshes, ChunkMeshes } from "./chunkMesher";
+
+interface EntityVisual {
+  group: THREE.Group;
+  body: THREE.Mesh;
+  plate: THREE.Sprite;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  lastHp: number;
+}
 
 // A soft twilight palette for a more mystical mood than plain daylight.
 const SKY = 0x9fb0e0;
@@ -14,7 +24,11 @@ export class Renderer {
   private renderer: THREE.WebGLRenderer;
   private chunkMeshes = new Map<string, ChunkMeshes>();
   private playerMeshes = new Map<string, THREE.Group>();
+  private entityVisuals = new Map<string, EntityVisual>();
   private highlight: THREE.LineSegments;
+  private raycaster = new THREE.Raycaster();
+  private center = new THREE.Vector2(0, 0);
+  private splats: { sprite: THREE.Sprite; born: number }[] = [];
 
   constructor(canvas: HTMLCanvasElement, private world: ClientWorld) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -141,7 +155,147 @@ export class Renderer {
     return sprite;
   }
 
+  // ---- Entities (monsters + NPCs) ----
+
+  syncEntities(snapshots: EntitySnapshot[]): void {
+    const seen = new Set<string>();
+    for (const e of snapshots) {
+      seen.add(e.id);
+      let vis = this.entityVisuals.get(e.id);
+      if (!vis) {
+        vis = this.makeEntity(e);
+        this.entityVisuals.set(e.id, vis);
+        this.scene.add(vis.group);
+      }
+      vis.group.position.set(e.pos.x, e.pos.y, e.pos.z);
+      vis.group.rotation.y = e.yaw;
+      if (e.kind === "monster" && e.hp !== vis.lastHp) {
+        vis.lastHp = e.hp;
+        this.drawPlate(vis, e);
+      }
+    }
+    // Remove entities no longer present.
+    for (const [id, vis] of this.entityVisuals) {
+      if (seen.has(id)) continue;
+      this.scene.remove(vis.group);
+      vis.body.geometry.dispose();
+      this.entityVisuals.delete(id);
+    }
+  }
+
+  private makeEntity(e: EntitySnapshot): EntityVisual {
+    const group = new THREE.Group();
+    const color = new THREE.Color(e.kind === "npc" ? this.npcColor(e.type) : this.monsterColor(e.type));
+    const scale = e.kind === "npc" ? 1 : 0.9;
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6 * scale, 1.6 * scale, 0.6 * scale),
+      new THREE.MeshLambertMaterial({ color }),
+    );
+    body.position.y = 0.8 * scale;
+    body.userData.entityId = e.id;
+    body.userData.entityKind = e.kind;
+    group.add(body);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 80;
+    const plate = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }),
+    );
+    plate.position.y = 1.9 * scale;
+    plate.scale.set(2.2, 0.7, 1);
+    group.add(plate);
+
+    const vis: EntityVisual = { group, body, plate, canvas, ctx: canvas.getContext("2d")!, lastHp: e.hp };
+    this.drawPlate(vis, e);
+    return vis;
+  }
+
+  private drawPlate(vis: EntityVisual, e: EntitySnapshot): void {
+    const ctx = vis.ctx;
+    ctx.clearRect(0, 0, 256, 80);
+    ctx.fillStyle = e.kind === "npc" ? "#7fd0ff" : "#ffe066";
+    ctx.font = "bold 26px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const label = e.kind === "monster" && e.level ? `${e.name} (Lv ${e.level})` : e.name;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0,0,0,0.8)";
+    ctx.strokeText(label, 128, 22);
+    ctx.fillText(label, 128, 22);
+    if (e.kind === "monster") {
+      const frac = Math.max(0, e.hp / e.maxHp);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(48, 44, 160, 16);
+      ctx.fillStyle = "#c0392b";
+      ctx.fillRect(50, 46, 156, 12);
+      ctx.fillStyle = "#2ecc71";
+      ctx.fillRect(50, 46, 156 * frac, 12);
+    }
+    (vis.plate.material as THREE.SpriteMaterial).map!.needsUpdate = true;
+  }
+
+  private monsterColor(type: string): string {
+    return { goblin: "#5a7d3a", wolf: "#9aa0a8", scorpion: "#b5803a", skeleton: "#dcd8c8" }[type] ?? "#aa4444";
+  }
+  private npcColor(role: string): string {
+    return { banker: "#3a6ea5", shop: "#a5673a", quest: "#7a3a8a" }[role] ?? "#888888";
+  }
+
+  /** Entity under the crosshair (screen center), or null. */
+  pickEntity(maxDist = 12): { id: string; kind: string; dist: number } | null {
+    this.raycaster.setFromCamera(this.center, this.camera);
+    const bodies = [...this.entityVisuals.values()].map((v) => v.body);
+    const hits = this.raycaster.intersectObjects(bodies, false);
+    if (!hits.length || hits[0].distance > maxDist) return null;
+    const o = hits[0].object;
+    return { id: o.userData.entityId, kind: o.userData.entityKind, dist: hits[0].distance };
+  }
+
+  /** Float a damage number above a position. */
+  spawnSplat(pos: { x: number; y: number; z: number }, dmg: number): void {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = dmg > 0 ? "#e23b2e" : "#3a78d0";
+    ctx.beginPath();
+    ctx.arc(32, 32, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 34px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(dmg), 32, 34);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, transparent: true }));
+    sprite.position.set(pos.x, pos.y + 2, pos.z);
+    sprite.scale.set(0.8, 0.8, 1);
+    this.scene.add(sprite);
+    this.splats.push({ sprite, born: performance.now() });
+  }
+
+  entitySplat(id: string, dmg: number): void {
+    const vis = this.entityVisuals.get(id);
+    if (vis) this.spawnSplat(vis.group.position, dmg);
+  }
+
+  private updateSplats(): void {
+    const now = performance.now();
+    for (let i = this.splats.length - 1; i >= 0; i--) {
+      const s = this.splats[i];
+      const age = (now - s.born) / 900;
+      if (age >= 1) {
+        this.scene.remove(s.sprite);
+        this.splats.splice(i, 1);
+        continue;
+      }
+      s.sprite.position.y += 0.012;
+      (s.sprite.material as THREE.SpriteMaterial).opacity = 1 - age;
+    }
+  }
+
   render(): void {
+    this.updateSplats();
     this.renderer.render(this.scene, this.camera);
   }
 }

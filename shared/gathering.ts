@@ -142,6 +142,34 @@ export const RECIPES: Recipe[] = [
     inputs: [{ item: "crystal", count: 2 }, { item: "iron_axe", count: 1 }],
     output: { item: "crystal_axe", count: 1 },
   },
+  // Smithing: smelt ore into bars, then forge bars into gear.
+  {
+    id: "smelt_iron",
+    name: "Smelt Iron Bar",
+    inputs: [{ item: "iron_ore", count: 1 }, { item: "coal", count: 1 }],
+    output: { item: "iron_bar", count: 1 },
+    skill: SkillId.Smithing,
+    levelReq: 1,
+    xp: 20,
+  },
+  {
+    id: "smith_iron_sword",
+    name: "Forge Iron Sword",
+    inputs: [{ item: "iron_bar", count: 2 }],
+    output: { item: "iron_sword", count: 1 },
+    skill: SkillId.Smithing,
+    levelReq: 5,
+    xp: 50,
+  },
+  {
+    id: "smith_aether_sword",
+    name: "Attune Aether Blade",
+    inputs: [{ item: "iron_sword", count: 1 }, { item: "crystal", count: 3 }],
+    output: { item: "aether_sword", count: 1 },
+    skill: SkillId.Smithing,
+    levelReq: 20,
+    xp: 200,
+  },
 ];
 
 export function recipeById(id: string): Recipe | undefined {

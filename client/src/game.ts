@@ -29,6 +29,8 @@ export class Game {
   private mineKey = "";
   private mineProgress = 0;
   private gatherKey = "";
+  private prevPrimary = false;
+  private combatHold = false;
   private lastMoveSent = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
@@ -49,6 +51,35 @@ export class Game {
     this.net.onMessage((m) => this.onMessage(m));
     this.net.send({ t: "join", name: this.playerName });
     this.loop();
+  }
+
+  // Route the held primary action: clicking a monster attacks it, clicking an
+  // NPC talks to it, otherwise we mine the targeted block.
+  private handleActions(dt: number): void {
+    if (this.hud.isModalOpen()) {
+      this.resetMining();
+      this.prevPrimary = this.controls.primaryHeld;
+      return;
+    }
+    const held = this.controls.primaryHeld;
+    const pressEdge = held && !this.prevPrimary;
+    this.prevPrimary = held;
+    if (!held) {
+      this.combatHold = false;
+      this.resetMining();
+      return;
+    }
+    if (pressEdge) {
+      const ent = this.renderer.pickEntity();
+      if (ent) {
+        this.combatHold = true; // suppress mining for the rest of this press
+        this.resetMining();
+        this.net.send(ent.kind === "monster" ? { t: "attack", id: ent.id } : { t: "talk", id: ent.id });
+        return;
+      }
+    }
+    if (this.combatHold) return;
+    this.updateMining(dt);
   }
 
   // Resolve the held mine/break action. Terrain blocks accumulate break
@@ -115,7 +146,7 @@ export class Game {
   }
 
   private onSecondary(hit: RaycastHit | null): void {
-    if (!hit) return;
+    if (!hit || this.hud.isModalOpen()) return;
     const item = this.hud.selectedItem();
     if (!item) {
       this.hud.notice("Select a placeable item in your pack first.");
@@ -141,6 +172,7 @@ export class Game {
         this.inventory = m.inventory;
         this.hud.setInventory(m.inventory);
         this.hud.setSkills(m.skills);
+        this.hud.setHealth(m.hp, m.maxHp);
         for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw);
         this.hud.notice("Welcome to Minescape! Press H for help.");
         break;
@@ -173,6 +205,39 @@ export class Game {
       case "notice":
         this.hud.notice(m.text);
         break;
+      case "entities":
+        this.renderer.syncEntities(m.entities);
+        break;
+      case "hitsplat":
+        if (m.id === "") this.hud.flashPlayerDamage(m.dmg);
+        else this.renderer.entitySplat(m.id, m.dmg);
+        break;
+      case "health":
+        this.hud.setHealth(m.hp, m.maxHp);
+        break;
+      case "death":
+        this.hud.showDeath();
+        break;
+      case "respawned":
+        this.controls.pos.set(m.spawn.x, m.spawn.y, m.spawn.z);
+        this.spawned = false; // re-gate physics until the new chunk loads
+        this.hud.hideDeath();
+        break;
+      case "dialogue":
+        this.hud.showDialogue(m);
+        break;
+      case "bank":
+        this.hud.openBank(m.items);
+        break;
+      case "shop":
+        this.hud.openShop(m.name, m.entries);
+        break;
+      case "closeUi":
+        this.hud.hideUi(m.ui);
+        break;
+      case "quest":
+        this.hud.setQuest(m);
+        break;
     }
   }
 
@@ -190,7 +255,7 @@ export class Game {
         this.controls.ensureNotStuck();
       }
       this.controls.update(dt);
-      this.updateMining(dt);
+      this.handleActions(dt);
     } else {
       this.controls.placeCamera();
     }

@@ -22,6 +22,8 @@ export enum BlockType {
   MossStone = 13,
   Runestone = 14,
   Crystal = 15,
+  // Biome surfaces:
+  Snow = 16,
 }
 
 export interface BlockDef {
@@ -60,6 +62,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
   [BlockType.MossStone]: { id: BlockType.MossStone, name: "Mossy Stone", color: [0.38, 0.48, 0.38], solid: true, transparent: false, drops: "stone", hardness: 2.2, tool: "pickaxe", requiresTool: true },
   [BlockType.Runestone]: { id: BlockType.Runestone, name: "Runestone", color: [0.26, 0.24, 0.4], solid: true, transparent: false, drops: "rune_shard", hardness: 3.2, tool: "pickaxe", requiresTool: true, glow: true },
   [BlockType.Crystal]: { id: BlockType.Crystal, name: "Aether Crystal", color: [0.55, 0.85, 0.95], solid: true, transparent: false, drops: "crystal", hardness: 2.8, tool: "pickaxe", requiresTool: true, glow: true },
+  [BlockType.Snow]: { id: BlockType.Snow, name: "Snow", color: [0.92, 0.95, 1.0], solid: true, transparent: false, drops: "dirt", hardness: 0.5, tool: "shovel", requiresTool: false },
 };
 
 export function isSolid(id: BlockType): boolean {

@@ -28,7 +28,11 @@ export const TILE_INDEX = {
   moss: 14,
   rune: 15,
   crystal: 16,
+  snow: 17,
 };
+
+/** Number of tiles to render into the atlas. */
+export const NUM_TILES = 18;
 
 function tile(i: number): { top: number; bottom: number; side: number } {
   return { top: i, bottom: i, side: i };
@@ -51,6 +55,7 @@ export const BLOCK_TILES: Partial<Record<BlockType, { top: number; bottom: numbe
   [BlockType.MossStone]: tile(TILE_INDEX.moss),
   [BlockType.Runestone]: tile(TILE_INDEX.rune),
   [BlockType.Crystal]: tile(TILE_INDEX.crystal),
+  [BlockType.Snow]: tile(TILE_INDEX.snow),
 };
 
 // ---- tiny seeded RNG for repeatable noise per tile ----
@@ -208,6 +213,11 @@ export function drawTile(ctx: Ctx, index: number): void {
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,0.7)";
       ctx.stroke();
+      break;
+    case TILE_INDEX.snow:
+      fill(ctx, ox, oy, "#eef3fb");
+      speckle(ctx, ox, oy, 161, 0.1, 0.5);
+      blobs(ctx, ox, oy, 162, "#cdd9ee", 6, 2);
       break;
     default:
       fill(ctx, ox, oy, "#ff00ff");
