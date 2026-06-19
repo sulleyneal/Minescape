@@ -11,9 +11,11 @@ import { existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { GameServer } from "./gameServer";
+import { FileStorage } from "./storage";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const SEED = Number(process.env.SEED ?? Math.floor(Math.random() * 1_000_000));
+const SAVE_PATH = process.env.SAVE_PATH ?? resolve(process.cwd(), "world-save.json");
 const DIST = resolve(process.cwd(), "dist");
 const hasClient = existsSync(join(DIST, "index.html"));
 
@@ -28,7 +30,8 @@ const MIME: Record<string, string> = {
   ".webmanifest": "application/manifest+json",
 };
 
-const game = new GameServer(SEED);
+const storage = new FileStorage(SAVE_PATH);
+const game = new GameServer(storage.load(), storage, SEED);
 
 const httpServer = createServer(async (req, res) => {
   if (!hasClient) {
@@ -69,7 +72,13 @@ httpServer.listen(PORT, () => {
   if (hasClient) console.log(`[minescape] serving client from ${DIST}`);
 });
 
-process.on("SIGINT", () => {
-  console.log("\n[minescape] shutting down");
+function shutdown(): void {
+  console.log("\n[minescape] saving and shutting down");
+  game.saveNow();
   httpServer.close(() => process.exit(0));
-});
+  // Failsafe in case sockets keep the server open.
+  setTimeout(() => process.exit(0), 2000).unref();
+}
+// Hosts send SIGTERM on redeploy/restart; save first so progress survives.
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

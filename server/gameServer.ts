@@ -13,6 +13,7 @@ import { emptySkills, levelForXp, maxHitpoints, SkillId, Skills } from "../share
 import { addItem, countItem, hasSpaceFor, Inventory, removeItem, startingInventory } from "./inventory";
 import { MonsterEntity, NpcEntity, rollLoot, spawnWorldEntities, WorldEntities } from "./entities";
 import { findSpawn } from "./spawn";
+import { hashPassword, PlayerSave, SaveData, SAVE_VERSION, Storage, verifyPassword } from "./storage";
 import { World } from "./world";
 
 const PLAYER_ATTACK_TICKS = 3; // ~1.8s between swings
@@ -23,10 +24,15 @@ const BANK_SLOTS = 240;
 const MONSTER_COUNT = 70;
 const ENTITY_VIEW = 64;
 const SNAPSHOT_EVERY = 2;
+const AUTOSAVE_MS = 30_000;
 
 interface Player {
   id: string;
   name: string;
+  /** Persistence key (lowercased name); null until the player has joined. */
+  accountKey: string | null;
+  salt: string | null;
+  passHash: string | null;
   socket: WebSocket;
   pos: Vec3;
   yaw: number;
@@ -35,6 +41,7 @@ interface Player {
   skills: Skills;
   hp: number;
   dead: boolean;
+  loggedIn: boolean;
   sentChunks: Set<string>;
   gathering: { x: number; y: number; z: number } | null;
   combatTargetId: string | null;
@@ -57,6 +64,13 @@ function randInt(max: number): number {
   return Math.floor(Math.random() * (max + 1));
 }
 
+/** Return a fixed-length slot array from a (possibly shorter/undefined) saved one. */
+function padSlots(arr: Inventory | undefined, n: number): Inventory {
+  const out: Inventory = new Array(n).fill(null);
+  if (arr) for (let i = 0; i < Math.min(arr.length, n); i++) out[i] = arr[i] ?? null;
+  return out;
+}
+
 let nextId = 1;
 
 export class GameServer {
@@ -64,13 +78,21 @@ export class GameServer {
   private players = new Map<string, Player>();
   private entities: WorldEntities;
   private tick = 0;
+  /** Persisted character records, keyed by lowercased name. */
+  private accounts = new Map<string, PlayerSave>();
+  /** Account key → live player id, to block duplicate logins. */
+  private online = new Map<string, string>();
 
-  constructor(seed: number) {
+  constructor(save: SaveData | null, private storage: Storage, fallbackSeed: number) {
+    const seed = save?.seed ?? fallbackSeed;
     this.world = new World(seed);
+    this.world.loadEdits(save?.world);
+    if (save) for (const [key, rec] of Object.entries(save.accounts)) this.accounts.set(key, rec);
     this.entities = spawnWorldEntities(this.world, MONSTER_COUNT);
     setInterval(() => this.onTick(), TICK_MS);
+    setInterval(() => this.saveNow(), AUTOSAVE_MS);
     console.log(
-      `[minescape] world ready (seed ${this.world.seed}); ${this.entities.monsters.size} monsters, ${this.entities.npcs.size} NPCs`,
+      `[minescape] world ready (seed ${this.world.seed}); ${this.entities.monsters.size} monsters, ${this.entities.npcs.size} NPCs; ${this.accounts.size} saved characters`,
     );
   }
 
@@ -89,6 +111,9 @@ export class GameServer {
     const player: Player = {
       id,
       name: `Player ${id}`,
+      accountKey: null,
+      salt: null,
+      passHash: null,
       socket,
       pos: this.findSpawn(),
       yaw: 0,
@@ -97,6 +122,7 @@ export class GameServer {
       skills,
       hp: maxHitpoints(skills),
       dead: false,
+      loggedIn: false,
       sentChunks: new Set(),
       gathering: null,
       combatTargetId: null,
@@ -120,6 +146,11 @@ export class GameServer {
 
     socket.on("close", () => {
       this.players.delete(id);
+      if (player.loggedIn && player.accountKey) {
+        this.accounts.set(player.accountKey, this.toSave(player));
+        if (this.online.get(player.accountKey) === id) this.online.delete(player.accountKey);
+        this.saveNow(); // persist this character's progress immediately
+      }
       this.broadcast({ t: "playerLeft", id }, id);
       console.log(`[minescape] ${player.name} left (${this.players.size} online)`);
     });
@@ -142,9 +173,10 @@ export class GameServer {
   }
 
   private handleMessage(player: Player, msg: ClientMessage): void {
+    if (msg.t !== "join" && !player.loggedIn) return; // ignore until logged in
     switch (msg.t) {
       case "join":
-        this.onJoin(player, msg.name);
+        this.onJoin(player, msg.name, msg.password ?? "");
         break;
       case "move":
         player.pos = msg.pos;
@@ -185,15 +217,45 @@ export class GameServer {
     }
   }
 
-  private onJoin(player: Player, name: string): void {
-    player.name = (name || player.name).slice(0, 16);
+  private onJoin(player: Player, name: string, password: string): void {
+    if (player.loggedIn) return;
+    const display = (name || "Adventurer").trim().slice(0, 16) || "Adventurer";
+    const key = display.toLowerCase();
+
+    if (this.online.has(key)) {
+      this.send(player, { t: "loginError", reason: "That character is already logged in." });
+      player.socket.close();
+      return;
+    }
+
+    const existing = this.accounts.get(key);
+    if (existing) {
+      if (!verifyPassword(password, existing.salt, existing.passHash)) {
+        this.send(player, { t: "loginError", reason: "Wrong password for that name." });
+        player.socket.close();
+        return;
+      }
+      this.applySave(player, existing);
+    } else {
+      // New character: keep the starting defaults, set its (optional) password.
+      const pw = hashPassword(password);
+      player.salt = pw?.salt ?? null;
+      player.passHash = pw?.hash ?? null;
+      player.name = display;
+    }
+
+    player.accountKey = key;
+    player.loggedIn = true;
+    this.online.set(key, player.id);
+    this.accounts.set(key, this.toSave(player));
+
     this.send(player, {
       t: "welcome",
       id: player.id,
       seed: this.world.seed,
       spawn: player.pos,
       players: [...this.players.values()]
-        .filter((p) => p.id !== player.id)
+        .filter((p) => p.id !== player.id && p.loggedIn)
         .map((p) => ({ id: p.id, name: p.name, pos: p.pos, yaw: p.yaw })),
       inventory: player.inventory,
       skills: player.skills,
@@ -202,11 +264,76 @@ export class GameServer {
     });
     this.streamChunks(player);
     this.sendEntities(player);
+    // Restore quest tracker state.
+    for (const q of QUESTS) {
+      if (player.questDone.has(q.id)) {
+        this.send(player, { t: "quest", id: q.id, name: q.name, status: "complete", progress: q.killCount, goal: q.killCount });
+      } else if (player.questActive.has(q.id)) {
+        const p = player.questProgress[q.id] ?? 0;
+        this.send(player, { t: "quest", id: q.id, name: q.name, status: "active", progress: p, goal: q.killCount });
+      }
+    }
     this.broadcast(
       { t: "playerJoined", player: { id: player.id, name: player.name, pos: player.pos, yaw: player.yaw } },
       player.id,
     );
-    console.log(`[minescape] ${player.name} joined (${this.players.size} online)`);
+    console.log(`[minescape] ${player.name} ${existing ? "logged in" : "registered"} (${this.players.size} online)`);
+  }
+
+  // ---- Persistence helpers ----
+
+  private toSave(player: Player): PlayerSave {
+    return {
+      name: player.name,
+      salt: player.salt,
+      passHash: player.passHash,
+      skills: player.skills,
+      inventory: player.inventory,
+      bank: player.bank,
+      hp: player.hp,
+      pos: player.pos,
+      yaw: player.yaw,
+      quest: {
+        active: [...player.questActive],
+        progress: { ...player.questProgress },
+        done: [...player.questDone],
+      },
+      lastSeen: Date.now(),
+    };
+  }
+
+  private applySave(player: Player, s: PlayerSave): void {
+    player.name = s.name;
+    player.salt = s.salt;
+    player.passHash = s.passHash;
+    // Merge skills so characters saved before a new skill existed still load.
+    player.skills = { ...emptySkills(), ...s.skills };
+    player.inventory = padSlots(s.inventory, player.inventory.length);
+    player.bank = padSlots(s.bank, player.bank.length);
+    player.hp = Math.max(1, Math.min(s.hp, maxHitpoints(player.skills)));
+    player.pos = s.pos;
+    player.yaw = s.yaw;
+    player.questActive = new Set(s.quest?.active ?? []);
+    player.questProgress = { ...(s.quest?.progress ?? {}) };
+    player.questDone = new Set(s.quest?.done ?? []);
+  }
+
+  /** Sync online players into accounts and write the save. Safe to call often. */
+  saveNow(): void {
+    for (const player of this.players.values()) {
+      if (player.loggedIn && player.accountKey) this.accounts.set(player.accountKey, this.toSave(player));
+    }
+    const data: SaveData = {
+      version: SAVE_VERSION,
+      seed: this.world.seed,
+      accounts: Object.fromEntries(this.accounts),
+      world: this.world.exportEdits(),
+    };
+    try {
+      this.storage.save(data);
+    } catch (err) {
+      console.error("[minescape] save failed:", err);
+    }
   }
 
   private streamChunks(player: Player): void {
@@ -255,7 +382,7 @@ export class GameServer {
   }
 
   private applyEdit(x: number, y: number, z: number, block: BlockType): void {
-    this.world.setBlock(x, y, z, block);
+    this.world.editBlock(x, y, z, block); // recorded for persistence
     this.broadcast({ t: "worldEdit", x, y, z, block });
   }
 

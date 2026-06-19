@@ -58,10 +58,11 @@ body {
   margin: 12px 0 24px;
   color: #cfd8e3;
 }
-#name {
+#name,
+#password {
   display: block;
   width: 260px;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
   padding: 12px 14px;
   font-size: 16px;
   border: 2px solid #5a4a2a;
@@ -69,6 +70,13 @@ body {
   background: #1c232b;
   color: #fff;
   text-align: center;
+}
+.start-hint {
+  width: 280px;
+  margin: 0 auto 16px;
+  font-size: 12px;
+  color: #9aa6b4;
+  line-height: 1.4;
 }
 #play {
   padding: 12px 28px;

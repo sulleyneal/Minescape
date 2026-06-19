@@ -37,6 +37,8 @@ export class World {
   readonly seed: number;
   private chunks = new Map<string, Uint8Array>();
   private depleted: DepletedNode[] = [];
+  /** Persistent player edits, per chunk, keyed by in-chunk index → block. */
+  private editsByChunk = new Map<string, Map<number, BlockType>>();
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -47,6 +49,9 @@ export class World {
     let chunk = this.chunks.get(key);
     if (!chunk) {
       chunk = this.generateChunk(cx, cz);
+      // Re-apply saved player edits on top of fresh generation.
+      const edits = this.editsByChunk.get(key);
+      if (edits) for (const [i, block] of edits) chunk[i] = block;
       this.chunks.set(key, chunk);
     }
     return chunk;
@@ -182,6 +187,7 @@ export class World {
     return this.getChunk(cx, cz)[idx(lx, y, lz)] as BlockType;
   }
 
+  /** Transient block change (resource depletion/respawn) — not persisted. */
   setBlock(x: number, y: number, z: number, block: BlockType): void {
     if (y < 0 || y >= WORLD_HEIGHT) return;
     const cx = Math.floor(x / CHUNK_SIZE);
@@ -189,6 +195,57 @@ export class World {
     const lx = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     this.getChunk(cx, cz)[idx(lx, y, lz)] = block;
+  }
+
+  /** Permanent player edit (break/place) — recorded so it can be saved/restored. */
+  editBlock(x: number, y: number, z: number, block: BlockType): void {
+    if (y < 0 || y >= WORLD_HEIGHT) return;
+    const cx = Math.floor(x / CHUNK_SIZE);
+    const cz = Math.floor(z / CHUNK_SIZE);
+    const lx = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const key = chunkKey(cx, cz);
+    this.getChunk(cx, cz)[idx(lx, y, lz)] = block;
+    let edits = this.editsByChunk.get(key);
+    if (!edits) {
+      edits = new Map();
+      this.editsByChunk.set(key, edits);
+    }
+    edits.set(idx(lx, y, lz), block);
+  }
+
+  /** Load saved edits before chunks are generated (applied on generation). */
+  loadEdits(list: [number, number, number, number][] | undefined): void {
+    if (!list) return;
+    for (const [x, y, z, block] of list) {
+      const cx = Math.floor(x / CHUNK_SIZE);
+      const cz = Math.floor(z / CHUNK_SIZE);
+      const lx = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+      const lz = ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+      const key = chunkKey(cx, cz);
+      let edits = this.editsByChunk.get(key);
+      if (!edits) {
+        edits = new Map();
+        this.editsByChunk.set(key, edits);
+      }
+      edits.set(idx(lx, y, lz), block as BlockType);
+    }
+  }
+
+  /** Flatten edits for saving: [x, y, z, block]. */
+  exportEdits(): [number, number, number, number][] {
+    const out: [number, number, number, number][] = [];
+    for (const [key, edits] of this.editsByChunk) {
+      const [cx, cz] = key.split(",").map(Number);
+      for (const [i, block] of edits) {
+        const y = Math.floor(i / (CHUNK_SIZE * CHUNK_SIZE));
+        const rem = i - y * CHUNK_SIZE * CHUNK_SIZE;
+        const lz = Math.floor(rem / CHUNK_SIZE);
+        const lx = rem - lz * CHUNK_SIZE;
+        out.push([cx * CHUNK_SIZE + lx, y, cz * CHUNK_SIZE + lz, block]);
+      }
+    }
+    return out;
   }
 
   /** Deplete a resource node and schedule its respawn. */

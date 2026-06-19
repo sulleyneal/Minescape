@@ -23,6 +23,8 @@ export interface PlayerState {
 export interface JoinMsg {
   t: "join";
   name: string;
+  /** Optional password protecting the character on this name. */
+  password?: string;
 }
 
 export interface MoveMsg {
@@ -185,6 +187,12 @@ export interface NoticeMsg {
   text: string;
 }
 
+/** Login rejected (wrong password / already online). Client returns to the menu. */
+export interface LoginErrorMsg {
+  t: "loginError";
+  reason: string;
+}
+
 // ---- Entities (monsters + NPCs) ----
 
 export interface EntitySnapshot {
@@ -283,4 +291,5 @@ export type ServerMessage =
   | BankMsg
   | ShopMsg
   | CloseUiMsg
-  | QuestMsg;
+  | QuestMsg
+  | LoginErrorMsg;

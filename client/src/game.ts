@@ -35,7 +35,7 @@ export class Game {
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
 
-  constructor(canvas: HTMLCanvasElement, hudRoot: HTMLElement, private playerName: string) {
+  constructor(canvas: HTMLCanvasElement, hudRoot: HTMLElement, private playerName: string, private password: string) {
     this.renderer = new Renderer(canvas, this.world);
     this.hud = new Hud(hudRoot, (m) => this.net.send(m));
     this.controls = new Controls(canvas, this.renderer.camera, this.world, () => this.hud.isTyping());
@@ -46,12 +46,20 @@ export class Game {
     if (isTouchDevice()) new TouchControls(this.controls, canvas, hudRoot);
   }
 
+  /** Resolves once logged in (welcome), rejects on a login error. */
   async start(): Promise<void> {
     await this.net.connect();
     this.net.onMessage((m) => this.onMessage(m));
-    this.net.send({ t: "join", name: this.playerName });
+    this.net.send({ t: "join", name: this.playerName, password: this.password });
     this.loop();
+    return new Promise<void>((resolve, reject) => {
+      this.loginResolve = resolve;
+      this.loginReject = reject;
+    });
   }
+
+  private loginResolve: (() => void) | null = null;
+  private loginReject: ((e: Error) => void) | null = null;
 
   // Route the held primary action: clicking a monster attacks it, clicking an
   // NPC talks to it, otherwise we mine the targeted block.
@@ -166,7 +174,15 @@ export class Game {
 
   private onMessage(m: ServerMessage): void {
     switch (m.t) {
+      case "loginError":
+        this.loginReject?.(new Error(m.reason));
+        this.loginReject = null;
+        this.loginResolve = null;
+        break;
       case "welcome":
+        this.loginResolve?.();
+        this.loginResolve = null;
+        this.loginReject = null;
         this.myId = m.id;
         this.controls.pos.set(m.spawn.x, m.spawn.y, m.spawn.z);
         this.inventory = m.inventory;

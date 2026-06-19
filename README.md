@@ -55,6 +55,17 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
 **Multiplayer**
 - Up to 8 players in one world, with live avatars, name tags, shared monsters, and chat.
 
+**Persistence**
+- Log in with a name + optional password; your character (skills, inventory,
+  bank, HP, position, quest progress) and the world (seed + the blocks you've
+  mined/placed) are saved and restored. Saved on disconnect, every 30s, and on
+  shutdown. Storage backend is pluggable (`server/storage.ts`); the default
+  writes `world-save.json`. Set `SAVE_PATH` to point it at a persistent disk.
+  > **Hosting note:** Render's *free* web tier has an ephemeral filesystem, so
+  > the save file is lost on redeploy/spin-down there. For durable cloud saves,
+  > attach a Render persistent disk (and set `SAVE_PATH` to it) or wire a hosted
+  > database into the Storage interface.
+
 ## Running it
 
 ```bash
