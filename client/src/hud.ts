@@ -4,7 +4,7 @@
 
 import { INVENTORY_SLOTS, ITEMS, ItemStack } from "../../shared/items";
 import { CombatBonuses, Equipment, emptyEquipment, EQUIP_SLOTS, EquipSlot, SLOT_NAMES } from "../../shared/equipment";
-import { RECIPES } from "../../shared/gathering";
+import { GRID_SIZE } from "../../shared/crafting";
 import { ClientMessage } from "../../shared/protocol";
 import { levelForXp, levelProgress, SKILL_NAMES, SKILL_ORDER, Skills, SkillId, totalLevel, xpForLevel } from "../../shared/skills";
 
@@ -27,6 +27,10 @@ export class Hud {
   private shopEntries: { item: string; price: number }[] = [];
   private equipment: Equipment = emptyEquipment();
   private bonuses: CombatBonuses = { attack: 0, strength: 0, defence: 0 };
+  private gridCells: (ItemStack | null)[] = new Array(GRID_SIZE).fill(null);
+  private gridResult: ItemStack | null = null;
+  /** Item selected from the pack to place into the crafting grid. */
+  private gridSelected: string | null = null;
 
   constructor(private root: HTMLElement, private send: (m: ClientMessage) => void) {
     root.innerHTML = TEMPLATE;
@@ -38,7 +42,7 @@ export class Hud {
     this.craftEl = root.querySelector("#craft")!;
     this.totalEl = root.querySelector("#total-level")!;
 
-    this.buildCraftMenu();
+    this.renderCraftGrid();
     this.bindChat();
     this.bindToggles();
   }
@@ -86,7 +90,8 @@ export class Hud {
     for (const btn of Array.from(this.root.querySelectorAll<HTMLElement>(".panel-close"))) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (btn.dataset.closeUi) this.closeUi(btn.dataset.closeUi);
+        if (btn.dataset.closeGrid) this.closeCrafting();
+        else if (btn.dataset.closeUi) this.closeUi(btn.dataset.closeUi);
         else this.root.querySelector(btn.dataset.close!)?.classList.add("hidden");
       });
     }
@@ -104,8 +109,9 @@ export class Hud {
           if (!this.panel("#" + ui).classList.contains("hidden")) this.closeUi(ui);
         }
       }
+      if (e.code === "Escape" && !this.panel("#craft").classList.contains("hidden")) this.closeCrafting();
       if (this.isModalOpen()) return; // don't toggle panels behind a modal
-      if (e.code === "KeyC") this.togglePanel("#craft");
+      if (e.code === "KeyC") this.toggleCrafting();
       if (e.code === "KeyE") this.togglePanel("#equipment");
       if (e.code === "KeyH") help.classList.toggle("hidden");
       // Once the player starts moving, get the help out of the way.
@@ -123,16 +129,79 @@ export class Hud {
     (this.root.querySelector("#item-tip") as HTMLElement).style.opacity = "0";
   }
 
-  private buildCraftMenu(): void {
-    const list = this.craftEl.querySelector("#craft-list")!;
-    for (const r of RECIPES) {
-      const btn = document.createElement("button");
-      btn.className = "craft-btn";
-      const inputs = r.inputs.map((i) => `${i.count} ${ITEMS[i.item]?.name ?? i.item}`).join(", ");
-      btn.innerHTML = `<b>${r.name}</b><span>${inputs} → ${r.output.count} ${ITEMS[r.output.item]?.name}</span>`;
-      btn.onclick = () => this.send({ t: "craft", recipe: r.id });
-      list.appendChild(btn);
+  // ---- Crafting grid ----
+
+  toggleCrafting(): void {
+    const el = this.panel("#craft");
+    if (el.classList.contains("hidden")) {
+      el.classList.remove("hidden");
+      document.exitPointerLock?.();
+    } else {
+      this.closeCrafting();
     }
+  }
+
+  private closeCrafting(): void {
+    this.panel("#craft").classList.add("hidden");
+    this.gridSelected = null;
+    this.send({ t: "gridClear" }); // return any placed items to the pack
+    this.renderInventory();
+  }
+
+  /** Server pushed the authoritative grid contents + result. */
+  setGrid(cells: (ItemStack | null)[], result: ItemStack | null): void {
+    this.gridCells = cells;
+    this.gridResult = result;
+    this.renderCraftGrid();
+  }
+
+  private craftOpen(): boolean {
+    return !this.panel("#craft").classList.contains("hidden");
+  }
+
+  private slotEl(stack: ItemStack | null): HTMLElement {
+    const slot = document.createElement("div");
+    slot.className = "slot";
+    if (stack) {
+      const def = ITEMS[stack.item];
+      slot.style.background = def?.color ?? "#555";
+      slot.title = def?.name ?? stack.item;
+      if (def?.icon) {
+        const ic = document.createElement("span");
+        ic.className = "icon";
+        ic.textContent = def.icon;
+        slot.appendChild(ic);
+      }
+      if (stack.count > 1) {
+        const c = document.createElement("span");
+        c.className = "count";
+        c.textContent = String(stack.count);
+        slot.appendChild(c);
+      }
+    }
+    return slot;
+  }
+
+  private renderCraftGrid(): void {
+    const gridEl = this.panel("#craft-grid");
+    gridEl.innerHTML = "";
+    for (let i = 0; i < GRID_SIZE; i++) {
+      const cell = this.slotEl(this.gridCells[i]);
+      cell.classList.add("placeable");
+      cell.onclick = () => {
+        if (this.gridCells[i]) this.send({ t: "gridTake", cell: i });
+        else if (this.gridSelected) this.send({ t: "gridPlace", cell: i, item: this.gridSelected });
+      };
+      gridEl.appendChild(cell);
+    }
+    const resultEl = this.panel("#craft-result");
+    resultEl.innerHTML = "";
+    const r = this.slotEl(this.gridResult);
+    if (this.gridResult) {
+      r.classList.add("placeable");
+      r.onclick = () => this.send({ t: "gridCraft" });
+    }
+    resultEl.appendChild(r);
   }
 
   // ---- state updates from the server ----
@@ -238,7 +307,14 @@ export class Hud {
         slot.onmouseleave = () => this.hideTip();
         const equippable = def?.equip !== undefined;
         const placeable = def?.placeBlock !== undefined;
+        if (this.craftOpen() && stack.item === this.gridSelected) slot.classList.add("selected");
         slot.onclick = () => {
+          if (this.craftOpen()) {
+            // Pick this item to place into the crafting grid.
+            this.gridSelected = this.gridSelected === stack.item ? null : stack.item;
+            this.renderInventory();
+            return;
+          }
           if (equippable) {
             this.send({ t: "equip", slot: i });
             return;
@@ -247,7 +323,7 @@ export class Hud {
           this.selectedSlot = this.selectedSlot === i ? -1 : i;
           this.renderInventory();
         };
-        if (equippable || placeable) slot.classList.add("placeable");
+        slot.classList.add("placeable");
       }
       this.invEl.appendChild(slot);
     }
@@ -520,9 +596,14 @@ const TEMPLATE = `
     <input id="chat-input" maxlength="200" placeholder="Press Enter to chat..." />
   </div>
   <div id="craft" class="panel hidden">
-    <button class="panel-close" data-close="#craft">×</button>
+    <button class="panel-close" data-close-grid="1">×</button>
     <h3>Crafting (C)</h3>
-    <div id="craft-list"></div>
+    <div id="craft-area">
+      <div id="craft-grid"></div>
+      <div id="craft-arrow">➜</div>
+      <div id="craft-result"></div>
+    </div>
+    <div class="grid-label">Click an item in your pack to pick it, then click grid cells to place it. Click the result to craft.</div>
   </div>
   <div id="equipment" class="panel hidden">
     <button class="panel-close" data-close="#equipment">×</button>

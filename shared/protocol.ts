@@ -124,6 +124,29 @@ export interface UnequipMsg {
   slot: EquipSlot;
 }
 
+/** Move one of `item` from the pack into crafting grid cell (0-8). */
+export interface GridPlaceMsg {
+  t: "gridPlace";
+  cell: number;
+  item: string;
+}
+
+/** Return the contents of a crafting grid cell to the pack. */
+export interface GridTakeMsg {
+  t: "gridTake";
+  cell: number;
+}
+
+/** Craft the current grid result once. */
+export interface GridCraftMsg {
+  t: "gridCraft";
+}
+
+/** Return all grid items to the pack (e.g. closing the window). */
+export interface GridClearMsg {
+  t: "gridClear";
+}
+
 export type ClientMessage =
   | JoinMsg
   | MoveMsg
@@ -138,7 +161,11 @@ export type ClientMessage =
   | ShopActionMsg
   | RespawnMsg
   | EquipMsg
-  | UnequipMsg;
+  | UnequipMsg
+  | GridPlaceMsg
+  | GridTakeMsg
+  | GridCraftMsg
+  | GridClearMsg;
 
 // ---- Server -> Client ----
 
@@ -233,6 +260,13 @@ export interface PlayerGearMsg {
   t: "playerGear";
   id: string;
   gear: Gear;
+}
+
+/** Current crafting grid contents + the result it would produce. */
+export interface GridMsg {
+  t: "grid";
+  cells: (ItemStack | null)[];
+  result: ItemStack | null;
 }
 
 // ---- Entities (monsters + NPCs) ----
@@ -336,4 +370,5 @@ export type ServerMessage =
   | QuestMsg
   | LoginErrorMsg
   | EquipmentMsg
-  | PlayerGearMsg;
+  | PlayerGearMsg
+  | GridMsg;

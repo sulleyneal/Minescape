@@ -49,7 +49,7 @@ export class Game {
     this.controls.onSecondary = (hit) => this.onSecondary(hit);
 
     // Phones/tablets get on-screen joystick + action buttons.
-    if (isTouchDevice()) new TouchControls(this.controls, canvas, hudRoot);
+    if (isTouchDevice()) new TouchControls(this.controls, canvas, hudRoot, this.hud);
   }
 
   /** Resolves once logged in (welcome), rejects on a login error. */
@@ -266,6 +266,9 @@ export class Game {
         break;
       case "playerGear":
         this.renderer.setPlayerGear(m.id, m.gear);
+        break;
+      case "grid":
+        this.hud.setGrid(m.cells, m.result);
         break;
     }
   }

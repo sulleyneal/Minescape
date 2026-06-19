@@ -8,6 +8,7 @@ import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
 import { MonsterDef, NPCS, QUESTS, questByGiver, SHOP } from "../shared/entities";
 import { emptyEquipment, Equipment, equipmentBonuses, EQUIP_SLOTS, EquipSlot, gearFromEquipment } from "../shared/equipment";
+import { GRID_SIZE, matchGrid } from "../shared/crafting";
 import { nodeForBlock, recipeById } from "../shared/gathering";
 import { bestTool, ITEMS } from "../shared/items";
 import { ClientMessage, EntitySnapshot, ServerMessage, Skin, Vec3 } from "../shared/protocol";
@@ -42,6 +43,8 @@ interface Player {
   inventory: Inventory;
   bank: Inventory;
   equipment: Equipment;
+  /** Crafting grid contents (row-major, 9 cells). */
+  craftGrid: Inventory;
   skills: Skills;
   hp: number;
   dead: boolean;
@@ -125,6 +128,7 @@ export class GameServer {
       inventory: startingInventory(),
       bank: new Array(BANK_SLOTS).fill(null),
       equipment: emptyEquipment(),
+      craftGrid: new Array(GRID_SIZE).fill(null),
       skills,
       hp: maxHitpoints(skills),
       dead: false,
@@ -153,6 +157,7 @@ export class GameServer {
     socket.on("close", () => {
       this.players.delete(id);
       if (player.loggedIn && player.accountKey) {
+        this.returnGrid(player); // don't lose items left in the crafting grid
         this.accounts.set(player.accountKey, this.toSave(player));
         if (this.online.get(player.accountKey) === id) this.online.delete(player.accountKey);
         this.saveNow(); // persist this character's progress immediately
@@ -225,6 +230,20 @@ export class GameServer {
         break;
       case "unequip":
         this.onUnequip(player, msg.slot);
+        break;
+      case "gridPlace":
+        this.onGridPlace(player, msg.cell, msg.item);
+        break;
+      case "gridTake":
+        this.onGridTake(player, msg.cell);
+        break;
+      case "gridCraft":
+        this.onGridCraft(player);
+        break;
+      case "gridClear":
+        this.returnGrid(player);
+        this.sendGrid(player);
+        this.send(player, { t: "inventory", inventory: player.inventory });
         break;
     }
   }
@@ -779,6 +798,70 @@ export class GameServer {
     this.send(player, { t: "equipment", equipment: player.equipment, bonuses: equipmentBonuses(player.equipment) });
     // Tell other clients about the worn-armor colors for avatar display.
     this.broadcast({ t: "playerGear", id: player.id, gear: gearFromEquipment(player.equipment) }, player.id);
+  }
+
+  // ---- Crafting grid ----
+
+  private sendGrid(player: Player): void {
+    const ids = player.craftGrid.map((c) => c?.item ?? null);
+    const recipe = matchGrid(ids);
+    const result = recipe ? { item: recipe.output.item, count: recipe.output.count } : null;
+    this.send(player, { t: "grid", cells: player.craftGrid, result });
+  }
+
+  private onGridPlace(player: Player, cell: number, item: string): void {
+    if (cell < 0 || cell >= GRID_SIZE) return;
+    if (countItem(player.inventory, item) < 1) return;
+    const existing = player.craftGrid[cell];
+    if (existing && existing.item !== item) return; // cell holds a different item
+    removeItem(player.inventory, item, 1);
+    if (existing) existing.count += 1;
+    else player.craftGrid[cell] = { item, count: 1 };
+    this.send(player, { t: "inventory", inventory: player.inventory });
+    this.sendGrid(player);
+  }
+
+  private onGridTake(player: Player, cell: number): void {
+    if (cell < 0 || cell >= GRID_SIZE) return;
+    const c = player.craftGrid[cell];
+    if (!c) return;
+    addItem(player.inventory, c.item, c.count);
+    player.craftGrid[cell] = null;
+    this.send(player, { t: "inventory", inventory: player.inventory });
+    this.sendGrid(player);
+  }
+
+  private onGridCraft(player: Player): void {
+    const recipe = matchGrid(player.craftGrid.map((c) => c?.item ?? null));
+    if (!recipe) return;
+    if (recipe.skill && recipe.levelReq && levelForXp(player.skills[recipe.skill]) < recipe.levelReq) {
+      this.send(player, { t: "notice", text: `You need ${recipe.skill} level ${recipe.levelReq}.` });
+      return;
+    }
+    if (!hasSpaceFor(player.inventory, recipe.output.item)) {
+      this.send(player, { t: "notice", text: "Your inventory is full." });
+      return;
+    }
+    // Consume one item from every occupied cell.
+    for (let i = 0; i < GRID_SIZE; i++) {
+      const c = player.craftGrid[i];
+      if (!c) continue;
+      c.count -= 1;
+      if (c.count <= 0) player.craftGrid[i] = null;
+    }
+    addItem(player.inventory, recipe.output.item, recipe.output.count);
+    if (recipe.skill && recipe.xp) this.awardXp(player, recipe.skill, recipe.xp);
+    this.send(player, { t: "inventory", inventory: player.inventory });
+    this.sendGrid(player);
+    this.send(player, { t: "notice", text: `You craft ${recipe.output.count} ${ITEMS[recipe.output.item]?.name}.` });
+  }
+
+  private returnGrid(player: Player): void {
+    for (let i = 0; i < GRID_SIZE; i++) {
+      const c = player.craftGrid[i];
+      if (c) addItem(player.inventory, c.item, c.count);
+      player.craftGrid[i] = null;
+    }
   }
 
   // ---- Entity snapshots ----

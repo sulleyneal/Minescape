@@ -468,6 +468,37 @@ body {
   background: #3a2f1c;
 }
 
+/* ---- Crafting grid ---- */
+#craft-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 12px 0;
+}
+#craft-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(3, 40px);
+  gap: 4px;
+}
+#craft-grid .slot {
+  width: 40px;
+  height: 40px;
+}
+#craft-arrow {
+  font-size: 28px;
+  color: #ffd24a;
+}
+#craft-result .slot {
+  width: 48px;
+  height: 48px;
+  border-color: #ffd24a;
+}
+#craft-result .slot .icon {
+  font-size: 26px;
+}
+
 /* ---- Equipment ---- */
 #equipment {
   min-width: 280px;

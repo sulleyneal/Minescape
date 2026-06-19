@@ -52,8 +52,13 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
 - **Town with NPCs:** a banker (store items beyond your 28 slots), a shopkeeper
   (buy/sell with coins), and a quest giver.
 - **Quests:** accept "The Goblin Menace", track kills, and claim a reward.
-- **Smithing:** smelt ore into bars and forge swords; attune Aether gear with crystals.
-- A 28-slot inventory, a large bank, and crafting (planks, cooking, tools, weapons).
+- **Minecraft-style crafting:** a 3×3 grid (press C) with shaped + shapeless
+  recipes and a result slot — planks, sticks, smelting, cooking, and the classic
+  shaped tool/armor/weapon patterns. Click a pack item to pick it, click grid
+  cells to place, click the result to craft.
+- **Smithing:** smelt ore into bars then forge iron gear in the grid; attune
+  Aether gear with crystals.
+- A 28-slot inventory and a large bank.
 
 **Multiplayer**
 - Up to 8 players in one world, with live avatars, name tags, shared monsters, and chat.

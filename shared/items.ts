@@ -32,6 +32,7 @@ export const ITEMS: Record<string, ItemDef> = {
   logs: { id: "logs", name: "Logs", placeBlock: BlockType.Log, stackable: true, color: "#6b4a29", icon: "🪵" },
   leaves: { id: "leaves", name: "Leaves", placeBlock: BlockType.Leaves, stackable: true, color: "#408033", icon: "🍃" },
   plank: { id: "plank", name: "Plank", placeBlock: BlockType.Plank, stackable: true, color: "#b38d54", icon: "🟧" },
+  stick: { id: "stick", name: "Stick", stackable: true, color: "#8a6a3a", icon: "🥢", value: 1 },
   coal: { id: "coal", name: "Coal", stackable: true, color: "#3a3a40", icon: "⚫" },
   iron_ore: { id: "iron_ore", name: "Iron Ore", stackable: true, color: "#a67f6b", icon: "🟤" },
   gold_ore: { id: "gold_ore", name: "Gold Ore", stackable: true, color: "#c7a847", icon: "🟡" },

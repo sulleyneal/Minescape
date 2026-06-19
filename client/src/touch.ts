@@ -4,6 +4,7 @@
 // input API the keyboard/mouse use, so the rest of the game is unchanged.
 
 import { Controls } from "./controls";
+import { Hud } from "./hud";
 
 export function isTouchDevice(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -16,6 +17,7 @@ export class TouchControls {
     private controls: Controls,
     private canvas: HTMLCanvasElement,
     private root: HTMLElement,
+    private hud: Hud,
   ) {
     this.buildUi();
     this.bindLook();
@@ -43,12 +45,8 @@ export class TouchControls {
       () => (this.controls.primaryHeld = true),
       () => (this.controls.primaryHeld = false),
     );
-    this.bindButton(wrap.querySelector("#btn-craft")!, () => this.toggleCraft());
+    this.bindButton(wrap.querySelector("#btn-craft")!, () => this.hud.toggleCrafting());
     // Panels are dismissed via their × buttons (wired in the HUD).
-  }
-
-  private toggleCraft(): void {
-    document.querySelector("#craft")?.classList.toggle("hidden");
   }
 
   private bindButton(el: Element, action: () => void): void {
