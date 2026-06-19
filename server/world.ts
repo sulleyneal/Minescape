@@ -31,6 +31,8 @@ interface DepletedNode {
   y: number;
   z: number;
   original: BlockType;
+  /** What the node was set to while depleted; respawn is skipped if it changed. */
+  depleted: BlockType;
   respawnAtTick: number;
 }
 
@@ -272,7 +274,9 @@ export class World {
     const original = this.getBlock(x, y, z);
     this.setBlock(x, y, z, depletedBlock);
     if (respawnTicks > 0) {
-      this.depleted.push({ x, y, z, original, respawnAtTick: tick + respawnTicks });
+      // Replace any stale schedule for this exact spot so a node can't queue twice.
+      this.depleted = this.depleted.filter((d) => d.x !== x || d.y !== y || d.z !== z);
+      this.depleted.push({ x, y, z, original, depleted: depletedBlock, respawnAtTick: tick + respawnTicks });
     }
   }
 
@@ -282,8 +286,15 @@ export class World {
     const ready = this.depleted.filter((d) => d.respawnAtTick <= tick);
     if (ready.length === 0) return [];
     this.depleted = this.depleted.filter((d) => d.respawnAtTick > tick);
-    for (const d of ready) this.setBlock(d.x, d.y, d.z, d.original);
-    return ready.map((d) => ({ x: d.x, y: d.y, z: d.z, block: d.original }));
+    const restored: { x: number; y: number; z: number; block: BlockType }[] = [];
+    for (const d of ready) {
+      // Only regrow if the spot is still depleted (a player may have mined or
+      // built over it in the meantime — don't clobber that).
+      if (this.getBlock(d.x, d.y, d.z) !== d.depleted) continue;
+      this.setBlock(d.x, d.y, d.z, d.original);
+      restored.push({ x: d.x, y: d.y, z: d.z, block: d.original });
+    }
+    return restored;
   }
 
   static isGatherable(block: BlockType): boolean {

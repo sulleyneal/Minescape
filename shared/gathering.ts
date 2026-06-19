@@ -34,9 +34,20 @@ export const GATHER_NODES: GatherNode[] = [
     xp: 25,
     yields: "logs",
     depletedBlock: BlockType.Air,
-    respawnTicks: 10,
+    respawnTicks: 45, // ~27s; trees are renewable but shouldn't pop back instantly
     baseChance: 0.35,
     tool: "axe",
+  },
+  {
+    block: BlockType.MossStone,
+    skill: SkillId.Mining,
+    levelReq: 1,
+    xp: 30,
+    yields: "stone",
+    depletedBlock: BlockType.Stone, // becomes plain rock, then the moss grows back
+    respawnTicks: 15,
+    baseChance: 0.45,
+    tool: "pickaxe",
   },
   {
     block: BlockType.CoalOre,
