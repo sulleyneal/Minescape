@@ -411,6 +411,8 @@ export class GameServer {
         this.send(player, { t: "inventory", inventory: player.inventory });
       }
       this.applyEdit(x, y, z, BlockType.Air);
+      // Mining out rock (stone, mossy stone, runestone, crystal) trains Mining.
+      if (def.mineXp) this.awardXp(player, SkillId.Mining, def.mineXp);
     } else {
       if (current !== BlockType.Air && current !== BlockType.Water) return;
       const itemId = Object.values(ITEMS).find((i) => i.placeBlock === block)?.id;
