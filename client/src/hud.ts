@@ -6,7 +6,7 @@ import { INVENTORY_SLOTS, ITEMS, ItemStack } from "../../shared/items";
 import { CombatBonuses, Equipment, emptyEquipment, EQUIP_SLOTS, EquipSlot, SLOT_NAMES } from "../../shared/equipment";
 import { GRID_SIZE } from "../../shared/crafting";
 import { ClientMessage } from "../../shared/protocol";
-import { levelForXp, levelProgress, SKILL_NAMES, SKILL_ORDER, Skills, SkillId, totalLevel, xpForLevel } from "../../shared/skills";
+import { combatLevel, levelForXp, levelProgress, SKILL_NAMES, SKILL_ORDER, Skills, SkillId, totalLevel, xpForLevel } from "../../shared/skills";
 
 export class Hud {
   private skillsEl: HTMLElement;
@@ -103,6 +103,10 @@ export class Hud {
         else this.root.querySelector(btn.dataset.close!)?.classList.add("hidden");
       });
     }
+    // On-screen toolbar buttons (desktop; hidden under touch, which has its own).
+    this.panel("#btn-equipment").addEventListener("click", () => this.toggleEquipment());
+    this.panel("#btn-crafting").addEventListener("click", () => this.toggleCrafting());
+
     // Tapping the help text (no interactive parts) also closes it.
     help.addEventListener("click", () => help.classList.add("hidden"));
     this.panel("#respawn-btn").addEventListener("click", () => {
@@ -120,7 +124,7 @@ export class Hud {
       if (e.code === "Escape" && !this.panel("#craft").classList.contains("hidden")) this.closeCrafting();
       if (this.isModalOpen()) return; // don't toggle panels behind a modal
       if (e.code === "KeyC") this.toggleCrafting();
-      if (e.code === "KeyE") this.togglePanel("#equipment");
+      if (e.code === "KeyE") this.toggleEquipment();
       if (e.code === "KeyH") help.classList.toggle("hidden");
       // Once the player starts moving, get the help out of the way.
       if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(e.code)) help.classList.add("hidden");
@@ -138,6 +142,11 @@ export class Hud {
   }
 
   // ---- Crafting grid ----
+
+  /** Open/close the equipment screen (E key, desktop button, or touch button). */
+  toggleEquipment(): void {
+    this.togglePanel("#equipment");
+  }
 
   toggleCrafting(): void {
     const el = this.panel("#craft");
@@ -357,6 +366,41 @@ export class Hud {
     (bar.querySelector("span") as HTMLElement).textContent = `❤ ${Math.ceil(hp)}/${maxHp}`;
   }
 
+  /** Show/update the locked combat target's name + health. */
+  setTargetBar(name: string, hp: number, maxHp: number, level?: number): void {
+    const el = this.panel("#target-bar");
+    el.classList.remove("hidden");
+    (el.querySelector(".tb-name") as HTMLElement).textContent = level ? `${name} (Lv ${level})` : name;
+    const frac = Math.max(0, Math.min(1, hp / maxHp));
+    (el.querySelector(".tb-hp i") as HTMLElement).style.width = `${frac * 100}%`;
+    (el.querySelector(".tb-hp span") as HTMLElement).textContent = `${Math.ceil(hp)}/${maxHp}`;
+  }
+
+  hideTargetBar(): void {
+    this.panel("#target-bar").classList.add("hidden");
+  }
+
+  /** Compass-style pointers to other online players. Arrow up = dead ahead. */
+  setPlayerTrackers(list: { name: string; rot: number; dist: number }[]): void {
+    const el = this.panel("#trackers");
+    if (list.length === 0) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+    el.classList.remove("hidden");
+    el.innerHTML = `<div class="tk-title">Players nearby</div>`;
+    for (const t of list) {
+      const row = document.createElement("div");
+      row.className = "tk-row";
+      row.innerHTML =
+        `<span class="tk-arrow" style="transform:rotate(${t.rot}deg)">▲</span>` +
+        `<span class="tk-name">${escapeHtml(t.name)}</span>` +
+        `<span class="tk-dist">${Math.round(t.dist)}m</span>`;
+      el.appendChild(row);
+    }
+  }
+
   setEquipment(equipment: Equipment, bonuses: CombatBonuses): void {
     this.equipment = equipment;
     this.bonuses = bonuses;
@@ -374,8 +418,9 @@ export class Hud {
     for (const slot of EQUIP_SLOTS) {
       const id = this.equipment[slot];
       const def = id ? ITEMS[id] : null;
+      const eq = def?.equip;
       const row = document.createElement("div");
-      row.className = "equip-row";
+      row.className = "equip-row" + (def ? "" : " empty");
       const box = document.createElement("div");
       box.className = "slot" + (def ? " placeable" : "");
       if (def) {
@@ -389,15 +434,38 @@ export class Hud {
         box.title = `${def.name} (click to unequip)`;
         box.onclick = () => this.send({ t: "unequip", slot });
       }
-      const label = document.createElement("span");
-      label.className = "equip-label";
-      label.textContent = `${SLOT_NAMES[slot]}: ${def?.name ?? "—"}`;
+      // Per-item stat readout, e.g. "+5 Atk  +5 Str" or "+9 Def".
+      const stats: string[] = [];
+      if (eq?.attack) stats.push(`+${eq.attack} Atk`);
+      if (eq?.strength) stats.push(`+${eq.strength} Str`);
+      if (eq?.defence) stats.push(`+${eq.defence} Def`);
+      const reqs: string[] = [];
+      if (eq?.reqAttack) reqs.push(`Atk ${eq.reqAttack}`);
+      if (eq?.reqDefence) reqs.push(`Def ${eq.reqDefence}`);
+
+      const info = document.createElement("div");
+      info.className = "equip-info";
+      info.innerHTML =
+        `<div class="equip-slotname">${SLOT_NAMES[slot]}</div>` +
+        `<div class="equip-item">${def?.name ?? "— empty —"}</div>` +
+        (stats.length ? `<div class="equip-stats">${stats.join(" · ")}</div>` : "") +
+        (reqs.length ? `<div class="equip-req">requires ${reqs.join(", ")}</div>` : "");
       row.appendChild(box);
-      row.appendChild(label);
+      row.appendChild(info);
       slotsEl.appendChild(row);
     }
-    this.panel("#equip-bonuses").textContent =
-      `Bonuses — Attack +${this.bonuses.attack}, Strength +${this.bonuses.strength}, Defence +${this.bonuses.defence}`;
+
+    // Combat summary: total bonuses, combat level, and estimated max hit.
+    const strLevel = this.skills ? levelForXp(this.skills[SkillId.Strength]) : 1;
+    const maxHit = 1 + Math.floor((strLevel + this.bonuses.strength - 1) / 3);
+    const cmb = this.skills ? combatLevel(this.skills) : 1;
+    this.panel("#equip-bonuses").innerHTML =
+      `<div class="eb-row"><b>Combat level</b><span>${cmb}</span></div>` +
+      `<div class="eb-row"><span>Attack bonus</span><span>+${this.bonuses.attack}</span></div>` +
+      `<div class="eb-row"><span>Strength bonus</span><span>+${this.bonuses.strength}</span></div>` +
+      `<div class="eb-row"><span>Defence bonus</span><span>+${this.bonuses.defence}</span></div>` +
+      `<div class="eb-row"><span>Max hit</span><span>${maxHit}</span></div>` +
+      `<div class="eb-legend">Attack = accuracy · Strength = damage · Defence = avoid hits</div>`;
   }
 
   setQuest(q: { id: string; name: string; status: string; progress: number; goal: number }): void {
@@ -569,7 +637,16 @@ const TEMPLATE = `
     <div id="skills"></div>
   </div>
   <div id="health"><i></i><span>❤</span></div>
+  <div id="target-bar" class="hidden">
+    <div class="tb-name"></div>
+    <div class="tb-hp"><i></i><span></span></div>
+  </div>
   <div id="quest-tracker" class="hidden"></div>
+  <div id="trackers" class="hidden"></div>
+  <div id="toolbar">
+    <button id="btn-equipment" title="Equipment (E)">🛡</button>
+    <button id="btn-crafting" title="Crafting (C)">⚒</button>
+  </div>
   <div id="notices"></div>
 
   <div id="dialogue" class="panel hidden">
@@ -635,7 +712,10 @@ const TEMPLATE = `
       <li><b>Hold left click</b> to mine — harder blocks take longer; the bar under the crosshair shows progress</li>
       <li>Tools matter: <b>hatchet</b> for trees/wood, <b>pickaxe</b> for stone &amp; ore, <b>shovel</b> for dirt/sand. You start with bronze ones</li>
       <li>Hold left click on a tree / ore / water to gather (Woodcutting, Mining, Fishing)</li>
-      <li><b>Click a monster</b> to fight it — mind your health bar! Click an <b>NPC</b> in the town to talk, bank, shop, or take a quest</li>
+      <li>Chopped trees don't grow back. Break <b>leaves</b> for a 🌱 <b>sapling</b>, then select it and <b>right click</b> grass or dirt to plant a new tree</li>
+      <li><b>Click a monster</b> to fight it — you'll stride into range automatically and its health bar appears up top. Mind your own health! Click an <b>NPC</b> in town to talk, bank, shop, or take a quest</li>
+      <li>Lost? Head for the <b>glowing tower</b> — it marks the town. <b>Roads</b> radiate out from it in every direction, so find a path and follow it home to the quest giver</li>
+      <li>Monsters den in <b>lairs</b> out in their home biomes — goblin camps in the plains, wolf dens in the woods, scorpion nests in the desert, a skeleton crypt in the peaks. Captain Rovan's quests send you to each</li>
       <li>Explore: <b>plains, forests, deserts, snowy tundra and mountains</b>, each with their own creatures</li>
       <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge gear via Smithing in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>

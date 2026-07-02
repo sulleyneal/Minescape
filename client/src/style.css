@@ -407,6 +407,52 @@ body {
   text-shadow: 1px 1px 2px #000;
 }
 
+/* ---- Locked combat target ---- */
+#target-bar {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  width: 240px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid #6a2a2a;
+  border-radius: 6px;
+  text-align: center;
+}
+#target-bar .tb-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffe066;
+  text-shadow: 1px 1px 2px #000;
+  margin-bottom: 4px;
+}
+#target-bar .tb-hp {
+  position: relative;
+  height: 16px;
+  background: #3a0e0e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#target-bar .tb-hp i {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: linear-gradient(90deg, #2ecc71, #58e08a);
+  transition: width 0.15s;
+}
+#target-bar .tb-hp span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 2px #000;
+}
+
 /* ---- Quest tracker ---- */
 #quest-tracker {
   position: fixed;
@@ -422,6 +468,48 @@ body {
 }
 #quest-tracker b {
   color: #ffd24a;
+}
+
+/* ---- Player direction trackers ---- */
+#trackers {
+  position: fixed;
+  top: 92px;
+  right: 12px;
+  width: 200px;
+  padding: 8px 10px;
+  background: rgba(20, 16, 8, 0.7);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #e8dcc0;
+}
+#trackers .tk-title {
+  font-weight: bold;
+  color: #ffd24a;
+  margin-bottom: 4px;
+}
+#trackers .tk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.6;
+}
+#trackers .tk-arrow {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  color: #7fd0ff;
+  transition: transform 0.12s linear;
+}
+#trackers .tk-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#trackers .tk-dist {
+  color: #b9a87f;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Damage flash ---- */
@@ -555,23 +643,91 @@ body {
 
 /* ---- Equipment ---- */
 #equipment {
-  min-width: 280px;
+  min-width: 320px;
 }
 .equip-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 5px 0;
+  margin: 6px 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
 }
-.equip-label {
+.equip-row.empty {
+  opacity: 0.5;
+}
+.equip-info {
+  line-height: 1.25;
+}
+.equip-slotname {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #b9a87f;
+}
+.equip-item {
+  font-size: 14px;
+  color: #f0e6cc;
+}
+.equip-stats {
+  font-size: 12px;
+  color: #6fd08a;
+}
+.equip-req {
+  font-size: 11px;
+  color: #e0a85a;
+}
+#equip-bonuses {
+  margin-top: 12px;
+  border-top: 1px solid #5a4a2a;
+  padding-top: 8px;
   font-size: 13px;
   color: #e8dcc0;
 }
-#equip-bonuses {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: bold;
+#equip-bonuses .eb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+#equip-bonuses .eb-row b {
   color: #ffd24a;
+}
+#equip-bonuses .eb-row span:last-child {
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+#equip-bonuses .eb-legend {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #9b8e6e;
+}
+
+/* ---- On-screen toolbar (desktop) ---- */
+#toolbar {
+  position: fixed;
+  right: 12px;
+  bottom: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#toolbar button {
+  width: 46px;
+  height: 46px;
+  font-size: 22px;
+  background: rgba(20, 16, 8, 0.8);
+  border: 2px solid #5a4a2a;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+#toolbar button:hover {
+  border-color: #ffd24a;
+  background: rgba(40, 32, 16, 0.9);
+}
+@media (pointer: coarse) {
+  #toolbar { display: none; } /* touch UI has its own buttons */
 }
 
 /* ---- Death overlay ---- */

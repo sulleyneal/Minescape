@@ -31,6 +31,8 @@ interface EntityVisual extends AnimState {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   lastHp: number;
+  /** Latest server snapshot, so the HUD can read a locked target's stats. */
+  snap: EntitySnapshot;
 }
 
 interface Burst {
@@ -340,6 +342,11 @@ export class Renderer {
     this.playerMeshes.delete(id);
   }
 
+  /** Names + positions of every other player avatar, for the on-screen tracker. */
+  otherPlayers(): { name: string; pos: THREE.Vector3 }[] {
+    return [...this.playerMeshes.values()].map((v) => ({ name: v.name, pos: v.group.position.clone() }));
+  }
+
   /** (Re)build an avatar's meshes from its current skin + worn gear. */
   private rebuildAvatar(vis: PlayerVisual): void {
     const { group, skin, gear } = vis;
@@ -418,6 +425,7 @@ export class Renderer {
         this.entityVisuals.set(e.id, vis);
         this.scene.add(vis.group);
       }
+      vis.snap = e;
       vis.target.set(e.pos.x, e.pos.y, e.pos.z);
       vis.tYaw = e.yaw;
       if (e.kind === "monster" && e.hp !== vis.lastHp) {
@@ -465,6 +473,7 @@ export class Renderer {
       canvas,
       ctx: canvas.getContext("2d")!,
       lastHp: e.hp,
+      snap: e,
       target: new THREE.Vector3(e.pos.x, e.pos.y, e.pos.z),
       tYaw: e.yaw,
       phase: Math.random() * Math.PI * 2,
@@ -536,6 +545,14 @@ export class Renderer {
     return null;
   }
 
+  /** Current stats + position of a tracked entity (for the locked target bar). */
+  getEntityInfo(id: string): { kind: string; type: string; name: string; level?: number; hp: number; maxHp: number; pos: THREE.Vector3 } | null {
+    const vis = this.entityVisuals.get(id);
+    if (!vis) return null;
+    const s = vis.snap;
+    return { kind: s.kind, type: s.type, name: s.name, level: s.level, hp: s.hp, maxHp: s.maxHp, pos: vis.group.position.clone() };
+  }
+
   // ---- Splats & particles ----
 
   /** Float a damage number above a position. */
@@ -567,6 +584,11 @@ export class Renderer {
     if (dmg > 0) {
       this.spawnBurst(this.tmpV.copy(vis.group.position).add(new THREE.Vector3(0, 1, 0)), "#e23b2e", { count: 10, speed: 2, life: 0.45, size: 0.07 });
     }
+    // Quick recoil pop so a landed hit reads as impact, not just a number.
+    vis.group.scale.setScalar(dmg > 0 ? 1.18 : 1.06);
+    setTimeout(() => {
+      if (this.entityVisuals.get(id) === vis) vis.group.scale.setScalar(1);
+    }, 90);
   }
 
   /** Spray a burst of colored particles (block debris, sparks, celebrations). */

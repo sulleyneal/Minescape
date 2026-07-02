@@ -26,6 +26,7 @@ const NAMES: Record<number, string> = {
   [TILE_INDEX.moss]: "Mossy stone",
   [TILE_INDEX.rune]: "Runestone",
   [TILE_INDEX.crystal]: "Aether crystal",
+  [TILE_INDEX.sapling]: "Sapling",
   [TILE_INDEX.snow]: "Snow",
   [TILE_INDEX.tallGrass]: "Tall grass",
   [TILE_INDEX.flower]: "Aether bloom",

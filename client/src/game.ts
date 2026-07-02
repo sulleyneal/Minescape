@@ -25,6 +25,10 @@ function weaponColor(id: string): string {
   return TIER_COLORS[1];
 }
 
+// Stop auto-walking a touch inside the server's 2.4-block melee range so we
+// reliably land in range without shoving through the monster.
+const COMBAT_RANGE = 1.9;
+
 export class Game {
   private world = new ClientWorld();
   private renderer: Renderer;
@@ -42,7 +46,10 @@ export class Game {
   private prevPrimary = false;
   private combatHold = false;
   private lastGatherSfx = 0;
+  /** Monster we're locked onto: auto-walk into range and show its health bar. */
+  private combatTargetId: string | null = null;
   private lastMoveSent = 0;
+  private lastTrackerUpdate = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
 
@@ -128,15 +135,67 @@ export class Game {
         this.combatHold = true; // suppress mining for the rest of this press
         this.resetMining();
         if (ent.kind === "monster") {
+          this.combatTargetId = ent.id; // lock on: auto-walk + target bar
           sfx.swing();
           this.renderer.triggerSwing();
+          this.net.send({ t: "attack", id: ent.id });
+        } else {
+          this.combatTargetId = null;
+          this.net.send({ t: "talk", id: ent.id });
         }
-        this.net.send(ent.kind === "monster" ? { t: "attack", id: ent.id } : { t: "talk", id: ent.id });
         return;
       }
+      this.combatTargetId = null; // clicked the world: break off combat
     }
     if (this.combatHold) return;
     this.updateMining(dt);
+  }
+
+  // Point a compass arrow at each other online player (throttled ~8/s). The
+  // arrow is rotated so "up" means dead ahead of where you're looking.
+  private updateTrackers(): void {
+    const now = performance.now();
+    if (now - this.lastTrackerUpdate < 120) return;
+    this.lastTrackerUpdate = now;
+    const others = this.renderer.otherPlayers();
+    const me = this.controls.pos;
+    const yaw = this.controls.yaw;
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const rx = -fz; // right vector = forward rotated -90°
+    const rz = fx;
+    const list = others
+      .map((o) => {
+        const dx = o.pos.x - me.x;
+        const dz = o.pos.z - me.z;
+        return {
+          name: o.name,
+          rot: (Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz) * 180) / Math.PI,
+          dist: Math.hypot(dx, dz),
+        };
+      })
+      .sort((a, b) => a.dist - b.dist);
+    this.hud.setPlayerTrackers(list);
+  }
+
+  // Keep the locked target's health bar current and stride into melee range.
+  private updateCombat(): void {
+    if (!this.combatTargetId || this.hud.isModalOpen()) {
+      this.controls.autoMove = null;
+      if (!this.combatTargetId) this.hud.hideTargetBar();
+      return;
+    }
+    const info = this.renderer.getEntityInfo(this.combatTargetId);
+    if (!info || info.kind !== "monster" || info.hp <= 0) {
+      this.combatTargetId = null;
+      this.controls.autoMove = null;
+      this.hud.hideTargetBar();
+      return;
+    }
+    this.hud.setTargetBar(info.name, info.hp, info.maxHp, info.level);
+    const p = this.controls.pos;
+    const dist = Math.hypot(info.pos.x - p.x, info.pos.z - p.z);
+    this.controls.autoMove = dist > COMBAT_RANGE ? info.pos : null;
   }
 
   // Resolve the held mine/break action. Terrain blocks accumulate break
@@ -316,6 +375,9 @@ export class Game {
         this.hud.setHealth(m.hp, m.maxHp);
         break;
       case "death":
+        this.combatTargetId = null;
+        this.controls.autoMove = null;
+        this.hud.hideTargetBar();
         this.hud.showDeath();
         sfx.death();
         break;
@@ -367,6 +429,8 @@ export class Game {
       }
       this.controls.update(dt);
       this.handleActions(dt);
+      this.updateCombat();
+      this.updateTrackers();
     } else {
       this.controls.placeCamera();
     }

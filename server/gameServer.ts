@@ -6,7 +6,7 @@ import { WebSocket } from "ws";
 import { sanitizeSkin } from "../shared/appearance";
 import { BlockType, BLOCKS } from "../shared/blocks";
 import { CHUNK_SIZE, DAY_TICKS, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
-import { MonsterDef, nextQuestFor, NPCS, QuestDef, QUESTS, SHOP } from "../shared/entities";
+import { MonsterDef, nextQuestFor, NPCS, QuestDef, QUESTS, questsByGiver, SHOP } from "../shared/entities";
 import { emptyEquipment, Equipment, equipmentBonuses, EQUIP_SLOTS, EquipSlot, gearFromEquipment } from "../shared/equipment";
 import { GRID_SIZE, matchGrid } from "../shared/crafting";
 import { nodeForBlock, recipeById } from "../shared/gathering";
@@ -24,7 +24,8 @@ const MELEE_RANGE = 2.4;
 const GIVE_UP_RANGE = 16;
 const REGEN_TICKS = 12; // +1 hp roughly every 7s
 const BANK_SLOTS = 240;
-const MONSTER_COUNT = 70;
+const GROW_TICKS = 100; // ~60s for a planted sapling to become a tree
+const SAPLING_DROP_CHANCE = 0.2; // chance leaves yield a sapling when broken
 const ENTITY_VIEW = 64;
 const SNAPSHOT_EVERY = 2;
 const AUTOSAVE_MS = 30_000;
@@ -95,7 +96,7 @@ export class GameServer {
     this.world = new World(seed);
     this.world.loadEdits(save?.world);
     if (save) for (const [key, rec] of Object.entries(save.accounts)) this.accounts.set(key, rec);
-    this.entities = spawnWorldEntities(this.world, MONSTER_COUNT);
+    this.entities = spawnWorldEntities(this.world);
     setInterval(() => this.onTick(), TICK_MS);
     setInterval(() => this.saveNow(), AUTOSAVE_MS);
     const byType = new Map<string, number>();
@@ -420,12 +421,32 @@ export class GameServer {
         this.send(player, { t: "inventory", inventory: player.inventory });
       }
       this.applyEdit(x, y, z, BlockType.Air);
+      // Mining out rock (stone, mossy stone, runestone, crystal) trains Mining.
+      if (def.mineXp) this.awardXp(player, SkillId.Mining, def.mineXp);
+      // Breaking leaves sometimes yields a sapling you can replant.
+      if (current === BlockType.Leaves && Math.random() < SAPLING_DROP_CHANCE && hasSpaceFor(player.inventory, "sapling")) {
+        addItem(player.inventory, "sapling", 1);
+        this.send(player, { t: "inventory", inventory: player.inventory });
+        this.send(player, { t: "notice", text: "You find a sapling." });
+      }
     } else {
       if (current !== BlockType.Air && current !== BlockType.Water) return;
+      // Saplings can only take root on grass or dirt.
+      if (block === BlockType.Sapling) {
+        const below = this.world.getBlock(x, y - 1, z);
+        if (below !== BlockType.Grass && below !== BlockType.Dirt) {
+          this.send(player, { t: "notice", text: "Saplings need grass or dirt to grow." });
+          return;
+        }
+      }
       const itemId = Object.values(ITEMS).find((i) => i.placeBlock === block)?.id;
       if (!itemId || !removeItem(player.inventory, itemId, 1)) return;
       this.send(player, { t: "inventory", inventory: player.inventory });
       this.applyEdit(x, y, z, block);
+      if (block === BlockType.Sapling) {
+        this.world.scheduleGrowth(x, y, z, GROW_TICKS, this.tick);
+        this.send(player, { t: "notice", text: "You plant the sapling — it will grow into a tree." });
+      }
     }
   }
 
@@ -615,36 +636,45 @@ export class GameServer {
     }
   }
 
-  private sendQuestDialogue(player: Player, npc: NpcEntity): void {
-    // An active quest takes priority; otherwise offer the next in the chain.
-    const active = QUESTS.find((q) => player.questActive.has(q.id));
-    if (active) {
-      const progress = player.questProgress[active.id] ?? 0;
-      if (progress >= active.killCount) {
-        this.completeQuest(player, npc, active);
-      } else {
-        const remaining = active.killCount - progress;
-        this.send(player, {
-          t: "dialogue", npc: npc.id, name: npc.def.name,
-          text: active.progressText.replace("{n}", String(remaining)),
-          options: [{ id: "bye", label: "I'm on it" }],
-        });
-      }
-      return;
+  /** The next quest a giver should offer/track: first incomplete one whose
+   *  prerequisite is met. Returns undefined when the chain is finished. */
+  private currentQuest(player: Player, giverId: string): QuestDef | undefined {
+    for (const q of questsByGiver(giverId)) {
+      if (player.questDone.has(q.id)) continue;
+      if (q.requires && !player.questDone.has(q.requires)) continue;
+      return q;
     }
-    const next = nextQuestFor("quest", player.questDone);
-    if (!next) {
+    return undefined;
+  }
+
+  private sendQuestDialogue(player: Player, npc: NpcEntity): void {
+    const quest = this.currentQuest(player, "quest");
+    if (!quest) {
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "You've done all I could ask and more, slayer of the Runebound. The realm is in your debt.",
+        text: "You've done all I could ask and more, slayer of the Runebound. The realm is at peace because of you.",
         options: [{ id: "bye", label: "Farewell" }],
       });
       return;
     }
-    this.send(player, {
-      t: "dialogue", npc: npc.id, name: npc.def.name, text: next.offerText,
-      options: [{ id: "accept", label: "I'll do it" }, { id: "decline", label: "Not now" }],
-    });
+    if (!player.questActive.has(quest.id)) {
+      this.send(player, {
+        t: "dialogue", npc: npc.id, name: npc.def.name, text: quest.offerText,
+        options: [{ id: "accept", label: "I'll do it" }, { id: "decline", label: "Not now" }],
+      });
+      return;
+    }
+    const progress = player.questProgress[quest.id] ?? 0;
+    if (progress >= quest.killCount) {
+      this.completeQuest(player, npc, quest);
+    } else {
+      const remaining = quest.killCount - progress;
+      this.send(player, {
+        t: "dialogue", npc: npc.id, name: npc.def.name,
+        text: quest.progressText.replace("{n}", String(remaining)),
+        options: [{ id: "bye", label: "I'm on it" }],
+      });
+    }
   }
 
   private completeQuest(player: Player, npc: NpcEntity, quest: QuestDef): void {
@@ -694,14 +724,14 @@ export class GameServer {
       this.send(player, { t: "closeUi", ui: "dialogue" });
       this.send(player, { t: "shop", name: SHOP.name, entries: SHOP.entries.map((e) => ({ item: e.item, price: e.price })) });
     } else if (option === "accept" && npc.def.role === "quest") {
-      const quest = nextQuestFor("quest", player.questDone);
+      const quest = this.currentQuest(player, "quest");
       if (!quest || player.questActive.has(quest.id)) return;
       player.questActive.add(quest.id);
       player.questProgress[quest.id] = 0;
       this.send(player, { t: "quest", id: quest.id, name: quest.name, status: "active", progress: 0, goal: quest.killCount });
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "Good hunting. Come back when the deed is done.",
+        text: quest.acceptText,
         options: [{ id: "bye", label: "I won't fail" }],
       });
     }
@@ -898,6 +928,12 @@ export class GameServer {
     for (const r of this.world.tickRespawns(this.tick)) {
       this.broadcast({ t: "worldEdit", x: r.x, y: r.y, z: r.z, block: r.block });
     }
+    // Planted saplings grow into full trees.
+    for (const g of this.world.tickGrowth(this.tick)) {
+      for (const e of this.world.growTreeAt(g.x, g.y, g.z)) {
+        this.broadcast({ t: "worldEdit", x: e.x, y: e.y, z: e.z, block: e.block });
+      }
+    }
 
     // Player-initiated combat.
     for (const player of this.players.values()) this.resolvePlayerCombat(player);
@@ -938,7 +974,10 @@ export class GameServer {
         this.send(player, { t: "inventory", inventory: player.inventory });
         this.awardXp(player, node.skill, node.xp);
         this.send(player, { t: "notice", text: `You get some ${ITEMS[node.yields]?.name?.toLowerCase()}.` });
-        if (node.respawnTicks > 0) {
+        if (node.permanent) {
+          this.applyEdit(x, y, z, BlockType.Air); // recorded edit: stays gone across reloads
+          player.gathering = null;
+        } else if (node.respawnTicks > 0) {
           this.world.depleteNode(x, y, z, node.depletedBlock, node.respawnTicks, this.tick);
           this.broadcast({ t: "worldEdit", x, y, z, block: node.depletedBlock });
           player.gathering = null;
@@ -1023,8 +1062,8 @@ export class GameServer {
       if (Math.random() < 0.4) m.headingTicks = 0; // sometimes just pause
     }
     m.headingTicks--;
-    // Stay near the spawn (leash).
-    if (horizDist(m.pos, m.spawn) > 9) m.heading = Math.atan2(m.spawn.x - m.pos.x, m.spawn.z - m.pos.z);
+    // Stay near the spawn (leash), keeping each lair's pack clustered.
+    if (horizDist(m.pos, m.spawn) > m.leash) m.heading = Math.atan2(m.spawn.x - m.pos.x, m.spawn.z - m.pos.z);
     const speed = 0.12;
     m.pos.x += Math.sin(m.heading) * speed;
     m.pos.z += Math.cos(m.heading) * speed;

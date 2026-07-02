@@ -31,6 +31,7 @@ export const ITEMS: Record<string, ItemDef> = {
   sand: { id: "sand", name: "Sand", placeBlock: BlockType.Sand, stackable: true, color: "#d4c287", icon: "🟨" },
   logs: { id: "logs", name: "Logs", placeBlock: BlockType.Log, stackable: true, color: "#6b4a29", icon: "🪵" },
   leaves: { id: "leaves", name: "Leaves", placeBlock: BlockType.Leaves, stackable: true, color: "#408033", icon: "🍃" },
+  sapling: { id: "sapling", name: "Sapling", placeBlock: BlockType.Sapling, stackable: true, color: "#4f9140", icon: "🌱", value: 2 },
   plank: { id: "plank", name: "Plank", placeBlock: BlockType.Plank, stackable: true, color: "#b38d54", icon: "🟧" },
   stick: { id: "stick", name: "Stick", stackable: true, color: "#8a6a3a", icon: "🥢", value: 1 },
   flower: { id: "flower", name: "Aether Bloom", placeBlock: BlockType.Flower, stackable: true, color: "#a673e6", icon: "🌸", value: 2 },

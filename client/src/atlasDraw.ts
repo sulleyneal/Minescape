@@ -29,15 +29,16 @@ export const TILE_INDEX = {
   rune: 15,
   crystal: 16,
   snow: 17,
-  tallGrass: 18,
-  flower: 19,
-  deadBush: 20,
-  cactusSide: 21,
-  cactusTop: 22,
+  sapling: 18,
+  tallGrass: 19,
+  flower: 20,
+  deadBush: 21,
+  cactusSide: 22,
+  cactusTop: 23,
 };
 
 /** Number of tiles to render into the atlas. */
-export const NUM_TILES = 23;
+export const NUM_TILES = 24;
 
 function tile(i: number): { top: number; bottom: number; side: number } {
   return { top: i, bottom: i, side: i };
@@ -61,6 +62,7 @@ export const BLOCK_TILES: Partial<Record<BlockType, { top: number; bottom: numbe
   [BlockType.Runestone]: tile(TILE_INDEX.rune),
   [BlockType.Crystal]: tile(TILE_INDEX.crystal),
   [BlockType.Snow]: tile(TILE_INDEX.snow),
+  [BlockType.Sapling]: tile(TILE_INDEX.sapling), // cross-rendered shoot
   [BlockType.TallGrass]: tile(TILE_INDEX.tallGrass),
   [BlockType.Flower]: tile(TILE_INDEX.flower),
   [BlockType.DeadBush]: tile(TILE_INDEX.deadBush),
@@ -280,6 +282,14 @@ export function drawTile(ctx: Ctx, index: number): void {
       fill(ctx, ox, oy, "#4c8c47");
       ctx.strokeStyle = "rgba(0,0,0,0.25)";
       ctx.strokeRect(ox + 3, oy + 3, 10, 10);
+      break;
+    case TILE_INDEX.sapling:
+      // A young sprout on a transparent background (cross-rendered): slim
+      // stem with a leafy green crown.
+      ctx.fillStyle = "#5a3d22"; // stem
+      ctx.fillRect(ox + 7, oy + 7, 2, 8);
+      blobs(ctx, ox + 2, oy + 1, 172, "#4f9140", 12, 3); // foliage crown
+      blobs(ctx, ox + 3, oy + 2, 173, "#2f5e26", 8, 2);
       break;
     default:
       fill(ctx, ox, oy, "#ff00ff");

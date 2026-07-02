@@ -7,6 +7,7 @@ import { Biome } from "../shared/biomes";
 import { CHUNK_SIZE, SEA_LEVEL, WORLD_HEIGHT } from "../shared/constants";
 import { GATHER_NODES } from "../shared/gathering";
 import { fbm } from "./noise";
+import { villageAffectsChunk, villageFlatHeight, villageHeightAt, villageNoTree, villageStructure, villageSurface } from "./village";
 
 const CHUNK_VOLUME = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
@@ -30,18 +31,32 @@ interface DepletedNode {
   y: number;
   z: number;
   original: BlockType;
+  /** What the node was set to while depleted; respawn is skipped if it changed. */
+  depleted: BlockType;
   respawnAtTick: number;
+}
+
+interface GrowingNode {
+  x: number;
+  y: number;
+  z: number;
+  /** Tick at which this sapling becomes a tree. */
+  at: number;
 }
 
 export class World {
   readonly seed: number;
   private chunks = new Map<string, Uint8Array>();
   private depleted: DepletedNode[] = [];
+  private growing: GrowingNode[] = [];
   /** Persistent player edits, per chunk, keyed by in-chunk index → block. */
   private editsByChunk = new Map<string, Map<number, BlockType>>();
+  /** Flat height the origin town sits on (computed once from the seed). */
+  private villageHeight: number;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
+    this.villageHeight = villageFlatHeight(this.rawHeightAt(0, 0));
   }
 
   getChunk(cx: number, cz: number): Uint8Array {
@@ -57,8 +72,8 @@ export class World {
     return chunk;
   }
 
-  /** Continuous terrain height, blended so biome borders don't form cliffs. */
-  heightAt(wx: number, wz: number): number {
+  /** Natural terrain height, blended so biome borders don't form cliffs. */
+  private rawHeightAt(wx: number, wz: number): number {
     const continent = fbm(this.seed, wx / 110, wz / 110, 4);
     const detail = fbm(this.seed + 7, wx / 22, wz / 22, 3);
     const mtn = fbm(this.seed + 320, wx / 150, wz / 150, 3);
@@ -66,6 +81,11 @@ export class World {
     const mountainBoost = peak * peak * 34;
     const h = SEA_LEVEL - 6 + continent * 22 + detail * 5 + mountainBoost;
     return Math.max(1, Math.min(WORLD_HEIGHT - 2, Math.floor(h)));
+  }
+
+  /** Surface height, flattened over the origin town's plaza. */
+  heightAt(wx: number, wz: number): number {
+    return villageHeightAt(wx, wz, this.rawHeightAt(wx, wz), this.villageHeight);
   }
 
   biomeAt(wx: number, wz: number): Biome {
@@ -99,6 +119,7 @@ export class World {
     const data = new Uint8Array(CHUNK_VOLUME);
     const baseX = cx * CHUNK_SIZE;
     const baseZ = cz * CHUNK_SIZE;
+    const village = villageAffectsChunk(baseX, baseZ);
 
     for (let lx = 0; lx < CHUNK_SIZE; lx++) {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
@@ -106,7 +127,8 @@ export class World {
         const wz = baseZ + lz;
         const biome = this.biomeAt(wx, wz);
         const height = this.heightAt(wx, wz);
-        const surface = this.surfaceBlock(biome, height);
+        const vSurface = village ? villageSurface(wx, wz) : null;
+        const surface = vSurface ?? this.surfaceBlock(biome, height);
         const subSurface = biome === Biome.Desert ? BlockType.Sand : BlockType.Dirt;
 
         for (let y = 0; y <= height; y++) {
@@ -128,18 +150,27 @@ export class World {
           data[idx(lx, y, lz)] = BlockType.Water;
         }
 
-        // Scatter trees per-biome on grass/snow above the waterline.
+        // Scatter trees per-biome on grass/snow above the waterline — but never
+        // over the town plaza, its roads, or buildings.
         const top = data[idx(lx, height, lz)];
         const density = TREE_DENSITY[biome];
-        if (density && (top === BlockType.Grass || top === BlockType.Snow) && height > SEA_LEVEL) {
+        if (density && (top === BlockType.Grass || top === BlockType.Snow) && height > SEA_LEVEL && !(village && villageNoTree(wx, wz))) {
           const r = fbm(this.seed + 99, wx * 1.7, wz * 1.7, 2);
           if (r > density && lx > 1 && lx < CHUNK_SIZE - 2 && lz > 1 && lz < CHUNK_SIZE - 2) {
             this.placeTree(data, lx, height + 1, lz);
           }
         }
 
-        // Ground decorations: grass/flowers on plains & forest, brush/cacti in deserts.
-        if (height > SEA_LEVEL && height + 1 < WORLD_HEIGHT && data[idx(lx, height + 1, lz)] === BlockType.Air) {
+        // Raise the town's walls, roofs and beacon tower above the surface.
+        if (village) {
+          for (const s of villageStructure(wx, wz, height)) {
+            if (s.y > height && s.y < WORLD_HEIGHT) data[idx(lx, s.y, lz)] = s.block;
+          }
+        }
+
+        // Ground decorations: grass/flowers on plains & forest, brush/cacti in
+        // deserts. Kept off the town's plaza, roads, and buildings.
+        if (!village && height > SEA_LEVEL && height + 1 < WORLD_HEIGHT && data[idx(lx, height + 1, lz)] === BlockType.Air) {
           const r2 = fbm(this.seed + 77, wx * 2.1, wz * 2.1, 2);
           if (top === BlockType.Grass && (biome === Biome.Plains || biome === Biome.Forest)) {
             if (r2 > 0.92) data[idx(lx, height + 1, lz)] = BlockType.Flower;
@@ -247,7 +278,50 @@ export class World {
         this.editsByChunk.set(key, edits);
       }
       edits.set(idx(lx, y, lz), block as BlockType);
+      // Saplings saved from a previous session still need to grow — reschedule
+      // them, spread out so they don't all sprout at once on restart.
+      if (block === BlockType.Sapling) this.growing.push({ x, y, z, at: 60 + Math.floor(Math.random() * 180) });
     }
+  }
+
+  /** Queue a planted sapling to grow into a tree after `ticks`. */
+  scheduleGrowth(x: number, y: number, z: number, ticks: number, tick: number): void {
+    this.growing = this.growing.filter((g) => g.x !== x || g.y !== y || g.z !== z);
+    this.growing.push({ x, y, z, at: tick + ticks });
+  }
+
+  /** Saplings ready to grow this tick (still saplings — not dug up meanwhile). */
+  tickGrowth(tick: number): { x: number; y: number; z: number }[] {
+    if (this.growing.length === 0) return [];
+    const ready = this.growing.filter((g) => g.at <= tick);
+    if (ready.length === 0) return [];
+    this.growing = this.growing.filter((g) => g.at > tick);
+    return ready
+      .filter((g) => this.getBlock(g.x, g.y, g.z) === BlockType.Sapling)
+      .map((g) => ({ x: g.x, y: g.y, z: g.z }));
+  }
+
+  /** Grow a full tree from a sapling base, returning the changed blocks to
+   *  broadcast. Trunk replaces the sapling; leaves only fill empty space. */
+  growTreeAt(x: number, y: number, z: number): { x: number; y: number; z: number; block: BlockType }[] {
+    const out: { x: number; y: number; z: number; block: BlockType }[] = [];
+    const put = (wx: number, wy: number, wz: number, block: BlockType, onlyAir: boolean) => {
+      if (wy < 0 || wy >= WORLD_HEIGHT) return;
+      if (onlyAir && this.getBlock(wx, wy, wz) !== BlockType.Air) return;
+      this.editBlock(wx, wy, wz, block);
+      out.push({ x: wx, y: wy, z: wz, block });
+    };
+    for (let i = 0; i < 4; i++) put(x, y + i, z, BlockType.Log, i !== 0); // base replaces the sapling
+    const topY = y + 4;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        for (let dy = -2; dy <= 1; dy++) {
+          if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue; // round the corners
+          put(x + dx, topY + dy, z + dz, BlockType.Leaves, true);
+        }
+      }
+    }
+    return out;
   }
 
   /** Flatten edits for saving: [x, y, z, block]. */
@@ -271,7 +345,9 @@ export class World {
     const original = this.getBlock(x, y, z);
     this.setBlock(x, y, z, depletedBlock);
     if (respawnTicks > 0) {
-      this.depleted.push({ x, y, z, original, respawnAtTick: tick + respawnTicks });
+      // Replace any stale schedule for this exact spot so a node can't queue twice.
+      this.depleted = this.depleted.filter((d) => d.x !== x || d.y !== y || d.z !== z);
+      this.depleted.push({ x, y, z, original, depleted: depletedBlock, respawnAtTick: tick + respawnTicks });
     }
   }
 
@@ -281,8 +357,15 @@ export class World {
     const ready = this.depleted.filter((d) => d.respawnAtTick <= tick);
     if (ready.length === 0) return [];
     this.depleted = this.depleted.filter((d) => d.respawnAtTick > tick);
-    for (const d of ready) this.setBlock(d.x, d.y, d.z, d.original);
-    return ready.map((d) => ({ x: d.x, y: d.y, z: d.z, block: d.original }));
+    const restored: { x: number; y: number; z: number; block: BlockType }[] = [];
+    for (const d of ready) {
+      // Only regrow if the spot is still depleted (a player may have mined or
+      // built over it in the meantime — don't clobber that).
+      if (this.getBlock(d.x, d.y, d.z) !== d.depleted) continue;
+      this.setBlock(d.x, d.y, d.z, d.original);
+      restored.push({ x: d.x, y: d.y, z: d.z, block: d.original });
+    }
+    return restored;
   }
 
   static isGatherable(block: BlockType): boolean {

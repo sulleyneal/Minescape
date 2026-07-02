@@ -142,12 +142,18 @@ export interface QuestDef {
   rewardCoins: number;
   rewardXp: { skill: SkillId; amount: number };
   rewardItem?: string;
+  /** Quest id that must be completed before this one is offered (chain order). */
+  requires?: string;
   offerText: string;
+  /** Shown right after the player accepts (a parting hint). */
+  acceptText: string;
   progressText: string;
   completeText: string;
 }
 
-// Quests form a chain: the giver offers the first one you haven't finished.
+// A quest chain from Captain Rovan that walks the player out to each of the
+// biome lairs in turn, escalating the foe and the reward — and ending with the
+// Runebound Golem, the realm's boss.
 export const QUESTS: QuestDef[] = [
   {
     id: "goblin_cull",
@@ -158,22 +164,55 @@ export const QUESTS: QuestDef[] = [
     rewardCoins: 150,
     rewardXp: { skill: SkillId.Attack, amount: 500 },
     rewardItem: "iron_sword",
-    offerText: "Slay 6 goblins in the plains and I'll reward you well. Will you help?",
+    offerText: "Slay 6 goblins at their camps in the plains and forests. Will you help?",
+    acceptText: "Good hunting. The goblins gather in camps out in the plains and forests.",
     progressText: "The goblins still trouble us. Return when {n} more lie defeated.",
     completeText: "You've done it! Take this blade and coin, hero. You've earned it.",
   },
   {
-    id: "wolf_hunt",
-    name: "Fangs in the Snow",
+    id: "wolf_pack",
+    name: "Thin the Pack",
     giver: "quest",
     killMonster: "wolf",
+    killCount: 5,
+    rewardCoins: 250,
+    rewardXp: { skill: SkillId.Defence, amount: 900 },
+    rewardItem: "iron_helm",
+    requires: "goblin_cull",
+    offerText: "Grey wolves den in the forests and tundra and harry our trappers. Cull 5 of them?",
+    acceptText: "Mind their fangs — the dens lie out in the colder woods and the tundra.",
+    progressText: "The pack still howls. {n} more wolves must fall.",
+    completeText: "The trappers can breathe again. This helm is yours, warrior.",
+  },
+  {
+    id: "desert_menace",
+    name: "Scourge of the Sands",
+    giver: "quest",
+    killMonster: "scorpion",
+    killCount: 5,
+    rewardCoins: 400,
+    rewardXp: { skill: SkillId.Strength, amount: 1500 },
+    rewardItem: "iron_body",
+    requires: "wolf_pack",
+    offerText: "Sand scorpions nest deep in the desert and sting any who pass. Destroy 5 nests-worth?",
+    acceptText: "Watch the dunes — the nests bake out in the open desert.",
+    progressText: "The sands still crawl. {n} more scorpions remain.",
+    completeText: "The trade roads are safe once more. Wear this plate with pride.",
+  },
+  {
+    id: "crypt_cleansing",
+    name: "The Mountain Crypt",
+    giver: "quest",
+    killMonster: "skeleton",
     killCount: 4,
-    rewardCoins: 300,
-    rewardXp: { skill: SkillId.Defence, amount: 800 },
-    rewardItem: "iron_shield",
-    offerText: "Wolves from the tundra maul our travellers. Cull 4 of the beasts and this shield is yours.",
-    progressText: "The howling continues. {n} wolves still roam.",
-    completeText: "The roads are safer already. Take this shield — you've a warrior's heart.",
+    rewardCoins: 600,
+    rewardXp: { skill: SkillId.Hitpoints, amount: 2500 },
+    rewardItem: "iron_legs",
+    requires: "desert_menace",
+    offerText: "The dead stir in a crypt high in the mountains. Lay 4 skeletons to rest before something worse wakes.",
+    acceptText: "May the light guide you. The crypt waits high in the peaks.",
+    progressText: "The crypt is not yet still. {n} more of the dead must fall.",
+    completeText: "The crypt sleeps... but the skeletons were guarding something. Rest, then return to me.",
   },
   {
     id: "golem_slayer",
@@ -181,14 +220,25 @@ export const QUESTS: QuestDef[] = [
     giver: "quest",
     killMonster: "golem",
     killCount: 1,
-    rewardCoins: 1000,
-    rewardXp: { skill: SkillId.Strength, amount: 2000 },
+    rewardCoins: 1500,
+    rewardXp: { skill: SkillId.Strength, amount: 2500 },
     rewardItem: "aether_sword",
-    offerText: "One task remains, and it is no small one. An ancient golem, bound in runes, stirs in the mountains. Destroy it, and a legend's blade is yours.",
+    requires: "crypt_cleansing",
+    offerText: "One task remains, and it is no small one. The thing the crypt-dead guarded — an ancient golem, bound in runes — now stirs among the peaks. Destroy it, and a legend's blade is yours.",
+    acceptText: "Bring your best steel. Its eyes burn blue in the dark — you will know it when you see it.",
     progressText: "The golem still stands. Seek it among the peaks — and bring your best steel.",
-    completeText: "By the old gods... you actually did it. The Aether Blade belongs to you now, slayer of the Runebound.",
+    completeText: "By the old gods... you actually did it. Bear the Aether Blade, slayer of the Runebound, champion of Minescape.",
   },
 ];
+
+/** Every quest a given NPC hands out, in chain order. */
+export function questsByGiver(npcId: string): QuestDef[] {
+  return QUESTS.filter((q) => q.giver === npcId);
+}
+
+export function questByGiver(npcId: string): QuestDef | undefined {
+  return QUESTS.find((q) => q.giver === npcId);
+}
 
 /** First quest in the giver's chain the player hasn't completed, or undefined. */
 export function nextQuestFor(giver: string, done: Iterable<string>): QuestDef | undefined {
