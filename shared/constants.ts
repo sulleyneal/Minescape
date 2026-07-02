@@ -13,3 +13,7 @@ export const VIEW_RADIUS = 6;
 export const TICK_MS = 600;
 
 export const MAX_PLAYERS = 8;
+
+// Full day/night cycle length in server ticks (1200 * 0.6s = 12 minutes).
+// Time 0 = dawn, 0.25 = noon, 0.5 = dusk, 0.75 = midnight.
+export const DAY_TICKS = 1200;

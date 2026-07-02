@@ -2,6 +2,7 @@
 // Spawning places them on the terrain surface; AI/combat is driven by the
 // game server's tick (it owns player state). Loot is rolled here.
 
+import { Biome } from "../shared/biomes";
 import { MONSTERS, MonsterDef, NPCS, NpcDef } from "../shared/entities";
 import { Vec3 } from "../shared/protocol";
 import { World } from "./world";
@@ -53,22 +54,11 @@ export function spawnWorldEntities(world: World, monsterCount: number): WorldEnt
     });
   }
 
-  // Scatter monsters on valid biomes within a ring around the origin.
   let made = 0;
-  let attempts = 0;
-  while (made < monsterCount && attempts < monsterCount * 20) {
-    attempts++;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 14 + Math.random() * 90;
-    const x = Math.round(Math.cos(angle) * dist);
-    const z = Math.round(Math.sin(angle) * dist);
-    const biome = world.biomeAt(x, z);
-    const candidates = Object.values(MONSTERS).filter((m) => m.biomes.includes(biome));
-    if (candidates.length === 0) continue;
-    const def = candidates[Math.floor(Math.random() * candidates.length)];
+  const addMonster = (def: MonsterDef, x: number, z: number): boolean => {
     const pos = surfacePos(world, x, z);
-    if (pos.y <= 1) continue; // skip deep water / void
-    const id = `m${made + 1}`;
+    if (pos.y <= 1) return false; // skip deep water / void
+    const id = `m${++made}`;
     monsters.set(id, {
       id,
       def,
@@ -83,7 +73,43 @@ export function spawnWorldEntities(world: World, monsterCount: number): WorldEnt
       heading: Math.random() * Math.PI * 2,
       headingTicks: 0,
     });
-    made++;
+    return true;
+  };
+
+  // Scatter monsters on valid biomes within a ring around the origin,
+  // weighted so rare creatures (bosses) stay rare.
+  let attempts = 0;
+  while (made < monsterCount && attempts < monsterCount * 20) {
+    attempts++;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 14 + Math.random() * 90;
+    const x = Math.round(Math.cos(angle) * dist);
+    const z = Math.round(Math.sin(angle) * dist);
+    const biome = world.biomeAt(x, z);
+    const candidates = Object.values(MONSTERS).filter((m) => m.biomes.includes(biome));
+    if (candidates.length === 0) continue;
+    const total = candidates.reduce((s, m) => s + (m.weight ?? 1), 0);
+    let roll = Math.random() * total;
+    let def = candidates[candidates.length - 1];
+    for (const c of candidates) {
+      roll -= c.weight ?? 1;
+      if (roll <= 0) {
+        def = c;
+        break;
+      }
+    }
+    addMonster(def, x, z);
+  }
+
+  // Guarantee the boss exists somewhere: hunt outward for mountain terrain.
+  const golem = MONSTERS.golem;
+  let golems = [...monsters.values()].filter((m) => m.def.id === "golem").length;
+  for (let r = 30; r <= 400 && golems < 2; r += 12) {
+    for (let a = 0; a < Math.PI * 2 && golems < 2; a += Math.PI / 10) {
+      const x = Math.round(Math.cos(a) * r);
+      const z = Math.round(Math.sin(a) * r);
+      if (world.biomeAt(x, z) === Biome.Mountains && addMonster(golem, x, z)) golems++;
+    }
   }
 
   return { monsters, npcs };

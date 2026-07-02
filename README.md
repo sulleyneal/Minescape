@@ -24,8 +24,13 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
   plus mystical mossy stone, glowing runestone and deep Aether crystals).
 - Streamed chunks rendered with face-culled meshing, procedurally generated
   textures (built on a canvas — still no image assets), scene lighting with
-  per-vertex ambient occlusion, a gradient sky dome, lowered translucent water,
-  soft contact shadows, and a twilight palette. Crystals and runes are self-lit.
+  per-vertex ambient occlusion, lowered translucent water, and soft contact
+  shadows. Crystals and runes are self-lit.
+- **A living world:** a server-synced day/night cycle with a travelling sun,
+  moon, and stars; biome ground cover (tall grass, Aether blooms, dead bushes,
+  cacti); walk-cycle animations on every creature and player; block-break
+  debris, hit sparks, and level-up bursts; a first-person tool/weapon that
+  swings while you work; and fully procedural sound effects (M to mute).
 - First-person controller with gravity, jumping, and voxel collision.
 - **Tool-gated, timed mining:** hold to break; harder blocks take longer and
   need the right tool (hatchet for wood, pickaxe for stone/ore, shovel for
@@ -52,7 +57,8 @@ assets. Preview them with `npm i canvas && npx tsx tools/render-atlas.ts`.*
   combat and shows on your avatar. Buy bronze gear, smith iron, attune Aether.
 - **Town with NPCs:** a banker (store items beyond your 28 slots), a shopkeeper
   (buy/sell with coins), and a quest giver.
-- **Quests:** accept "The Goblin Menace", track kills, and claim a reward.
+- **Quests:** a three-part chain — cull goblins, hunt tundra wolves, then slay
+  the **Runebound Golem**, a glowing-eyed mountain boss, for the Aether Blade.
 - **Minecraft-style crafting:** a 3×3 grid (press C) with shaped + shapeless
   recipes and a result slot — planks, sticks, smelting, cooking, and the classic
   shaped tool/armor/weapon patterns. Click a pack item to pick it, click grid

@@ -35,3 +35,9 @@ export const waterMaterial = new THREE.MeshLambertMaterial({
   opacity: 0.72,
   depthWrite: false,
 });
+// Cross-rendered plants: alpha-tested cutouts, visible from both sides.
+export const plantMaterial = new THREE.MeshLambertMaterial({
+  map: ATLAS,
+  alphaTest: 0.5,
+  side: THREE.DoubleSide,
+});

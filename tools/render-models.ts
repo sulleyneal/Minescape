@@ -23,13 +23,16 @@ interface Prim {
 
 function collect(group: THREE.Object3D): Prim[] {
   const prims: Prim[] = [];
+  group.updateMatrixWorld(true); // limbs sit inside pivot groups
+  const world = new THREE.Vector3();
   group.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!(m as THREE.Mesh).isMesh) return;
     const g = m.geometry as THREE.BufferGeometry & { parameters?: Record<string, number>; type: string };
     const p = g.parameters ?? {};
     const color = "#" + ((m.material as THREE.MeshLambertMaterial).color?.getHexString() ?? "888888");
-    const pos = m.position;
+    m.getWorldPosition(world);
+    const pos = { x: world.x, y: world.y, z: world.z };
     if (g.type === "ConeGeometry") {
       prims.push({ x: pos.x, y: pos.y, z: pos.z, w: (p.radius ?? 0.1) * 2, h: p.height ?? 0.2, d: (p.radius ?? 0.1) * 2, cone: true, color, depth: pos.x + pos.z + pos.y * 0.4 });
     } else {
@@ -81,7 +84,7 @@ function poly(ctx: any, pts: [number, number][], color: string): void {
   ctx.stroke();
 }
 
-const MONSTER_COLORS: Record<string, string> = { goblin: "#5a7d3a", wolf: "#9aa0a8", scorpion: "#b5803a", skeleton: "#dcd8c8" };
+const MONSTER_COLORS: Record<string, string> = { goblin: "#5a7d3a", wolf: "#9aa0a8", scorpion: "#b5803a", skeleton: "#dcd8c8", golem: "#7a86c8" };
 const NPC_COLORS: Record<string, string> = { banker: "#3a6ea5", shop: "#a5673a", quest: "#7a3a8a" };
 
 const cells: { label: string; group: THREE.Group }[] = [
@@ -89,12 +92,13 @@ const cells: { label: string; group: THREE.Group }[] = [
   { label: "Grey Wolf", group: buildMonsterModel("wolf", MONSTER_COLORS.wolf) },
   { label: "Scorpion", group: buildMonsterModel("scorpion", MONSTER_COLORS.scorpion) },
   { label: "Skeleton", group: buildMonsterModel("skeleton", MONSTER_COLORS.skeleton) },
+  { label: "Runebound Golem (BOSS)", group: buildMonsterModel("golem", MONSTER_COLORS.golem) },
   { label: "Banker", group: buildNpcModel("banker", NPC_COLORS.banker) },
   { label: "Shopkeeper", group: buildNpcModel("shop", NPC_COLORS.shop) },
   { label: "Quest Giver", group: buildNpcModel("quest", NPC_COLORS.quest) },
 ];
 
-const CW = 200, CH = 220, COLS = 4;
+const CW = 200, CH = 250, COLS = 4;
 const rows = Math.ceil(cells.length / COLS);
 const canvas = createCanvas(CW * COLS, CH * rows);
 const ctx = canvas.getContext("2d");

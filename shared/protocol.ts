@@ -181,6 +181,8 @@ export interface WelcomeMsg {
   maxHp: number;
   equipment: Equipment;
   bonuses: CombatBonuses;
+  /** World time of day, 0..1 (0 dawn, 0.25 noon, 0.5 dusk, 0.75 midnight). */
+  time: number;
 }
 
 export interface ChunkMsg {
@@ -267,6 +269,12 @@ export interface GridMsg {
   t: "grid";
   cells: (ItemStack | null)[];
   result: ItemStack | null;
+}
+
+/** Periodic world-clock sync for the day/night cycle. */
+export interface TimeMsg {
+  t: "time";
+  time: number;
 }
 
 // ---- Entities (monsters + NPCs) ----
@@ -371,4 +379,5 @@ export type ServerMessage =
   | LoginErrorMsg
   | EquipmentMsg
   | PlayerGearMsg
-  | GridMsg;
+  | GridMsg
+  | TimeMsg;

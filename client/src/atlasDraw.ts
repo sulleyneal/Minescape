@@ -29,10 +29,15 @@ export const TILE_INDEX = {
   rune: 15,
   crystal: 16,
   snow: 17,
+  tallGrass: 18,
+  flower: 19,
+  deadBush: 20,
+  cactusSide: 21,
+  cactusTop: 22,
 };
 
 /** Number of tiles to render into the atlas. */
-export const NUM_TILES = 18;
+export const NUM_TILES = 23;
 
 function tile(i: number): { top: number; bottom: number; side: number } {
   return { top: i, bottom: i, side: i };
@@ -56,6 +61,10 @@ export const BLOCK_TILES: Partial<Record<BlockType, { top: number; bottom: numbe
   [BlockType.Runestone]: tile(TILE_INDEX.rune),
   [BlockType.Crystal]: tile(TILE_INDEX.crystal),
   [BlockType.Snow]: tile(TILE_INDEX.snow),
+  [BlockType.TallGrass]: tile(TILE_INDEX.tallGrass),
+  [BlockType.Flower]: tile(TILE_INDEX.flower),
+  [BlockType.DeadBush]: tile(TILE_INDEX.deadBush),
+  [BlockType.Cactus]: { top: TILE_INDEX.cactusTop, bottom: TILE_INDEX.cactusTop, side: TILE_INDEX.cactusSide },
 };
 
 // ---- tiny seeded RNG for repeatable noise per tile ----
@@ -218,6 +227,59 @@ export function drawTile(ctx: Ctx, index: number): void {
       fill(ctx, ox, oy, "#eef3fb");
       speckle(ctx, ox, oy, 161, 0.1, 0.5);
       blobs(ctx, ox, oy, 162, "#cdd9ee", 6, 2);
+      break;
+    // Plant tiles are drawn on a transparent background (cross-rendered quads).
+    case TILE_INDEX.tallGrass: {
+      const rand = rng(171);
+      for (let i = 0; i < 7; i++) {
+        const x = 2 + Math.floor(rand() * 12);
+        const h = 6 + Math.floor(rand() * 8);
+        ctx.strokeStyle = i % 2 ? "#5a9a44" : "#487f36";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ox + x, oy + 15);
+        ctx.lineTo(ox + x + (rand() > 0.5 ? 1 : -1), oy + 15 - h);
+        ctx.stroke();
+      }
+      break;
+    }
+    case TILE_INDEX.flower: {
+      ctx.strokeStyle = "#487f36";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ox + 8, oy + 15);
+      ctx.lineTo(ox + 8, oy + 7);
+      ctx.stroke();
+      ctx.fillStyle = "#a673e6"; // violet petals
+      for (const [dx, dy] of [[-3, 0], [3, 0], [0, -3], [0, 3]]) ctx.fillRect(ox + 7 + dx, oy + 4 + dy, 3, 3);
+      ctx.fillStyle = "#ffd24a"; // gold center
+      ctx.fillRect(ox + 7, oy + 4, 3, 3);
+      break;
+    }
+    case TILE_INDEX.deadBush: {
+      const rand = rng(181);
+      ctx.strokeStyle = "#8a6a3a";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(ox + 8, oy + 15);
+        ctx.lineTo(ox + 3 + Math.floor(rand() * 10), oy + 4 + Math.floor(rand() * 5));
+        ctx.stroke();
+      }
+      break;
+    }
+    case TILE_INDEX.cactusSide:
+      fill(ctx, ox, oy, "#3f7a3a");
+      for (let x = 2; x < TILE; x += 4) {
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(ox + x, oy, 1, TILE);
+      }
+      blobs(ctx, ox, oy, 191, "#dfe8c8", 6, 1); // pale spines
+      break;
+    case TILE_INDEX.cactusTop:
+      fill(ctx, ox, oy, "#4c8c47");
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.strokeRect(ox + 3, oy + 3, 10, 10);
       break;
     default:
       fill(ctx, ox, oy, "#ff00ff");

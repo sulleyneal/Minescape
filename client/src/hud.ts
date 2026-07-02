@@ -363,6 +363,11 @@ export class Hud {
     this.renderEquipment();
   }
 
+  /** Item id of the equipped weapon, for the first-person viewmodel. */
+  getWeaponId(): string | null {
+    return this.equipment.weapon;
+  }
+
   private renderEquipment(): void {
     const slotsEl = this.panel("#equip-slots");
     slotsEl.innerHTML = "";
@@ -635,7 +640,7 @@ const TEMPLATE = `
       <li>Deep down: <b>mossy stone</b>, glowing <b>runestone</b> and <b>Aether crystals</b>. Forge gear via Smithing in crafting (<b>C</b>)</li>
       <li>Select a placeable item in your pack, then <b>Right click</b> to build</li>
       <li>Click weapons/armor in your pack to <b>equip</b> them (Defence + damage). <b>E</b> shows your equipment</li>
-      <li><b>C</b> crafting · <b>E</b> equipment · <b>Enter</b> chat · <b>H</b> help · <b>Esc</b> close menus</li>
+      <li><b>C</b> crafting · <b>E</b> equipment · <b>Enter</b> chat · <b>M</b> mute · <b>H</b> help · <b>Esc</b> close menus</li>
       <li><b>On a phone:</b> left joystick to move, drag the world to look, and use the buttons: ⛏ mine/gather, ＋ build, ⤒ jump, ⚒ craft.</li>
       <li style="color:#ffd24a"><b>Close this:</b> click ×, press <b>H</b>, or just start moving.</li>
     </ul>

@@ -33,6 +33,8 @@ export interface MonsterDef {
   /** Ticks before a slain monster respawns. */
   respawnTicks: number;
   biomes: Biome[];
+  /** Relative spawn weight within a biome (default 1; bosses are rare). */
+  weight?: number;
 }
 
 export const MONSTERS: Record<string, MonsterDef> = {
@@ -72,6 +74,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
       { item: "bones", min: 1, max: 1, chance: 1 },
       { item: "coins", min: 10, max: 40, chance: 0.95 },
       { item: "iron_bar", min: 1, max: 1, chance: 0.15 },
+    ],
+  },
+  golem: {
+    id: "golem", name: "Runebound Golem", level: 32, maxHp: 60, attack: 16, defence: 14, maxHit: 5,
+    attackTicks: 5, aggressive: true, aggroRange: 6, color: "#7a86c8", scale: 1.5, respawnTicks: 120,
+    biomes: [Biome.Mountains], weight: 0.12,
+    loot: [
+      { item: "rune_shard", min: 1, max: 3, chance: 1 },
+      { item: "crystal", min: 1, max: 3, chance: 0.8 },
+      { item: "coins", min: 80, max: 250, chance: 1 },
+      { item: "iron_bar", min: 1, max: 2, chance: 0.5 },
     ],
   },
 };
@@ -134,6 +147,7 @@ export interface QuestDef {
   completeText: string;
 }
 
+// Quests form a chain: the giver offers the first one you haven't finished.
 export const QUESTS: QuestDef[] = [
   {
     id: "goblin_cull",
@@ -148,8 +162,36 @@ export const QUESTS: QuestDef[] = [
     progressText: "The goblins still trouble us. Return when {n} more lie defeated.",
     completeText: "You've done it! Take this blade and coin, hero. You've earned it.",
   },
+  {
+    id: "wolf_hunt",
+    name: "Fangs in the Snow",
+    giver: "quest",
+    killMonster: "wolf",
+    killCount: 4,
+    rewardCoins: 300,
+    rewardXp: { skill: SkillId.Defence, amount: 800 },
+    rewardItem: "iron_shield",
+    offerText: "Wolves from the tundra maul our travellers. Cull 4 of the beasts and this shield is yours.",
+    progressText: "The howling continues. {n} wolves still roam.",
+    completeText: "The roads are safer already. Take this shield — you've a warrior's heart.",
+  },
+  {
+    id: "golem_slayer",
+    name: "The Runebound Golem",
+    giver: "quest",
+    killMonster: "golem",
+    killCount: 1,
+    rewardCoins: 1000,
+    rewardXp: { skill: SkillId.Strength, amount: 2000 },
+    rewardItem: "aether_sword",
+    offerText: "One task remains, and it is no small one. An ancient golem, bound in runes, stirs in the mountains. Destroy it, and a legend's blade is yours.",
+    progressText: "The golem still stands. Seek it among the peaks — and bring your best steel.",
+    completeText: "By the old gods... you actually did it. The Aether Blade belongs to you now, slayer of the Runebound.",
+  },
 ];
 
-export function questByGiver(npcId: string): QuestDef | undefined {
-  return QUESTS.find((q) => q.giver === npcId);
+/** First quest in the giver's chain the player hasn't completed, or undefined. */
+export function nextQuestFor(giver: string, done: Iterable<string>): QuestDef | undefined {
+  const finished = new Set(done);
+  return QUESTS.find((q) => q.giver === giver && !finished.has(q.id));
 }

@@ -33,6 +33,8 @@ export const ITEMS: Record<string, ItemDef> = {
   leaves: { id: "leaves", name: "Leaves", placeBlock: BlockType.Leaves, stackable: true, color: "#408033", icon: "🍃" },
   plank: { id: "plank", name: "Plank", placeBlock: BlockType.Plank, stackable: true, color: "#b38d54", icon: "🟧" },
   stick: { id: "stick", name: "Stick", stackable: true, color: "#8a6a3a", icon: "🥢", value: 1 },
+  flower: { id: "flower", name: "Aether Bloom", placeBlock: BlockType.Flower, stackable: true, color: "#a673e6", icon: "🌸", value: 2 },
+  cactus: { id: "cactus", name: "Cactus", placeBlock: BlockType.Cactus, stackable: true, color: "#4c8c47", icon: "🌵", value: 2 },
   coal: { id: "coal", name: "Coal", stackable: true, color: "#3a3a40", icon: "⚫" },
   iron_ore: { id: "iron_ore", name: "Iron Ore", stackable: true, color: "#a67f6b", icon: "🟤" },
   gold_ore: { id: "gold_ore", name: "Gold Ore", stackable: true, color: "#c7a847", icon: "🟡" },

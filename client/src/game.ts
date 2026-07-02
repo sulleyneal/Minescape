@@ -6,14 +6,24 @@ import { BlockType, BLOCKS } from "../../shared/blocks";
 import { CHUNK_SIZE } from "../../shared/constants";
 import { nodeForBlock } from "../../shared/gathering";
 import { bestTool, ITEMS, ItemStack } from "../../shared/items";
-import { ServerMessage } from "../../shared/protocol";
+import { ClientMessage, ServerMessage } from "../../shared/protocol";
 import { breakTime } from "../../shared/tools";
+import { sfx } from "./audio";
 import { Controls, RaycastHit } from "./controls";
 import { Hud } from "./hud";
 import { Net } from "./net";
 import { Renderer } from "./renderer";
 import { isTouchDevice, TouchControls } from "./touch";
 import { ClientWorld } from "./world";
+
+/** Metal tint per tool tier, for the first-person viewmodel. */
+const TIER_COLORS: Record<number, string> = { 1: "#9a7b4f", 2: "#c8c8d0", 3: "#8fdcef" };
+
+function weaponColor(id: string): string {
+  if (id.startsWith("iron")) return TIER_COLORS[2];
+  if (id.startsWith("aether") || id.startsWith("crystal")) return TIER_COLORS[3];
+  return TIER_COLORS[1];
+}
 
 export class Game {
   private world = new ClientWorld();
@@ -31,6 +41,7 @@ export class Game {
   private gatherKey = "";
   private prevPrimary = false;
   private combatHold = false;
+  private lastGatherSfx = 0;
   private lastMoveSent = 0;
   private lastPos = new THREE.Vector3();
   private clock = new THREE.Clock();
@@ -43,13 +54,41 @@ export class Game {
     private skin: { body: string; head: string },
   ) {
     this.renderer = new Renderer(canvas, this.world);
-    this.hud = new Hud(hudRoot, (m) => this.net.send(m));
+    this.hud = new Hud(hudRoot, (m) => {
+      this.uiSfx(m);
+      this.net.send(m);
+    });
     this.controls = new Controls(canvas, this.renderer.camera, this.world, () => this.hud.isTyping());
 
     this.controls.onSecondary = (hit) => this.onSecondary(hit);
 
     // Phones/tablets get on-screen joystick + action buttons.
     if (isTouchDevice()) new TouchControls(this.controls, canvas, hudRoot, this.hud);
+
+    sfx.init();
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "KeyM" && !this.hud.isTyping()) {
+        const muted = sfx.toggleMute();
+        this.hud.notice(muted ? "Sound off." : "Sound on.");
+      }
+    });
+  }
+
+  /** UI feedback sounds keyed off outgoing actions (single choke point). */
+  private uiSfx(m: ClientMessage): void {
+    switch (m.t) {
+      case "gridCraft":
+        sfx.craft();
+        break;
+      case "shopAction":
+        if (m.action !== "close") sfx.coin();
+        break;
+      case "equip":
+      case "unequip":
+      case "dialogueChoice":
+        sfx.uiClick();
+        break;
+    }
   }
 
   /** Resolves once logged in (welcome), rejects on a login error. */
@@ -88,6 +127,10 @@ export class Game {
       if (ent) {
         this.combatHold = true; // suppress mining for the rest of this press
         this.resetMining();
+        if (ent.kind === "monster") {
+          sfx.swing();
+          this.renderer.triggerSwing();
+        }
         this.net.send(ent.kind === "monster" ? { t: "attack", id: ent.id } : { t: "talk", id: ent.id });
         return;
       }
@@ -118,6 +161,11 @@ export class Game {
         this.gatherKey = key;
         this.net.send({ t: "gather", x: hit.x, y: hit.y, z: hit.z });
       }
+      const now = performance.now();
+      if (now - this.lastGatherSfx > 620) {
+        this.lastGatherSfx = now;
+        sfx.chopTick();
+      }
       this.hud.setMineProgress(-1); // server-driven; hide local bar
       return;
     }
@@ -143,7 +191,9 @@ export class Game {
       this.mineKey = key;
       this.mineProgress = 0;
     }
+    const prevStep = Math.floor(this.mineProgress * 5);
     this.mineProgress += dt / time;
+    if (Math.floor(this.mineProgress * 5) !== prevStep) sfx.mineTick();
     this.hud.setMineProgress(Math.min(1, this.mineProgress));
     if (this.mineProgress >= 1) {
       this.net.send({ t: "blockEdit", x: hit.x, y: hit.y, z: hit.z, block: BlockType.Air });
@@ -175,6 +225,8 @@ export class Game {
     const feetZ = Math.floor(this.controls.pos.z);
     const feetY = Math.floor(this.controls.pos.y);
     if (x === feetX && z === feetZ && (y === feetY || y === feetY + 1)) return;
+    sfx.place();
+    this.renderer.triggerSwing();
     this.net.send({ t: "blockEdit", x, y, z, block });
   }
 
@@ -196,14 +248,29 @@ export class Game {
         this.hud.setSkills(m.skills);
         this.hud.setHealth(m.hp, m.maxHp);
         this.hud.setEquipment(m.equipment, m.bonuses);
+        this.renderer.setTimeOfDay(m.time);
         for (const p of m.players) this.renderer.upsertPlayer(p.id, p.name, p.pos, p.yaw, p.skin, p.gear);
         this.hud.notice("Welcome to Minescape! Press H for help.");
         break;
       case "chunk":
         this.world.setChunk(m.cx, m.cz, m.data);
         break;
-      case "worldEdit":
+      case "worldEdit": {
+        const prev = this.world.getBlock(m.x, m.y, m.z);
         this.world.setBlock(m.x, m.y, m.z, m.block);
+        // A block breaking (by anyone) sprays debris in its color; only make
+        // noise if it happened near us.
+        if (m.block === BlockType.Air && prev !== BlockType.Air) {
+          const [r, g, b] = BLOCKS[prev].color;
+          const hex = "#" + new THREE.Color(r, g, b).getHexString();
+          this.renderer.spawnBurst({ x: m.x + 0.5, y: m.y + 0.5, z: m.z + 0.5 }, hex);
+          const d = Math.hypot(m.x - this.controls.pos.x, m.z - this.controls.pos.z);
+          if (d < 24) sfx.breakBlock();
+        }
+        break;
+      }
+      case "time":
+        this.renderer.setTimeOfDay(m.time);
         break;
       case "playerJoined":
         this.renderer.upsertPlayer(m.player.id, m.player.name, m.player.pos, m.player.yaw, m.player.skin, m.player.gear);
@@ -221,6 +288,11 @@ export class Game {
         break;
       case "skill":
         this.hud.updateSkill(m.skill, m.xp, m.levelUp);
+        if (m.levelUp) {
+          sfx.levelUp();
+          const p = this.controls.pos;
+          this.renderer.spawnBurst({ x: p.x, y: p.y + 1.4, z: p.z }, "#ffd24a", { count: 26, speed: 3.2, life: 1.1, gravity: 2.5, size: 0.12 });
+        }
         break;
       case "chat":
         this.hud.chat(m.from, m.text);
@@ -232,14 +304,20 @@ export class Game {
         this.renderer.syncEntities(m.entities);
         break;
       case "hitsplat":
-        if (m.id === "") this.hud.flashPlayerDamage(m.dmg);
-        else this.renderer.entitySplat(m.id, m.dmg);
+        if (m.id === "") {
+          this.hud.flashPlayerDamage(m.dmg);
+          sfx.hurt(m.dmg);
+        } else {
+          this.renderer.entitySplat(m.id, m.dmg);
+          sfx.hit(m.dmg);
+        }
         break;
       case "health":
         this.hud.setHealth(m.hp, m.maxHp);
         break;
       case "death":
         this.hud.showDeath();
+        sfx.death();
         break;
       case "respawned":
         this.controls.pos.set(m.spawn.x, m.spawn.y, m.spawn.z);
@@ -260,6 +338,7 @@ export class Game {
         break;
       case "quest":
         this.hud.setQuest(m);
+        if (m.status === "complete") sfx.questDone();
         break;
       case "equipment":
         this.hud.setEquipment(m.equipment, m.bonuses);
@@ -292,8 +371,9 @@ export class Game {
       this.controls.placeCamera();
     }
     this.renderer.setHighlight(this.spawned ? this.controls.raycast() : null);
+    this.updateHeld();
     this.renderer.syncChunks();
-    this.renderer.render();
+    this.renderer.render(dt);
 
     // Throttle movement updates and only send when actually moving/turning.
     const now = performance.now();
@@ -311,5 +391,37 @@ export class Game {
   private lastYaw = 0;
   private movedView(): boolean {
     return Math.abs(this.controls.yaw - this.lastYaw) > 0.02;
+  }
+
+  /** Pick what the first-person hand shows: selected block > context tool > weapon > fist. */
+  private updateHeld(): void {
+    let kind = "hand";
+    let color = "#e0b48a";
+    const sel = this.hud.selectedItem();
+    if (sel) {
+      kind = "block";
+      color = ITEMS[sel]?.color ?? "#888888";
+    } else {
+      const hit = this.spawned ? this.controls.raycast() : null;
+      const block = hit ? this.world.getBlock(hit.x, hit.y, hit.z) : BlockType.Air;
+      const node = block !== BlockType.Air ? nodeForBlock(block) : undefined;
+      const def = BLOCKS[block];
+      let toolType: string | null = null;
+      if (node && node.tool !== "hand") toolType = node.tool;
+      else if (block !== BlockType.Air && def.hardness > 0 && def.tool !== "hand") toolType = def.tool;
+      if (toolType === "pickaxe" || toolType === "axe" || toolType === "shovel") {
+        const t = bestTool(this.inventory, toolType);
+        kind = toolType;
+        color = TIER_COLORS[t?.tier ?? 1];
+      } else {
+        const weapon = this.hud.getWeaponId();
+        if (weapon) {
+          kind = "sword";
+          color = weaponColor(weapon);
+        }
+      }
+    }
+    this.renderer.setHeld(kind, color);
+    this.renderer.setHeldActive(this.controls.primaryHeld && !this.hud.isModalOpen() && !this.combatHold);
   }
 }

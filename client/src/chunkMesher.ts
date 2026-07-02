@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import { BlockType, BLOCKS, isOpaque } from "../../shared/blocks";
 import { CHUNK_SIZE, WORLD_HEIGHT } from "../../shared/constants";
-import { BLOCK_TILES, glowMaterial, opaqueMaterial, tileUV, waterMaterial } from "./textures";
+import { BLOCK_TILES, glowMaterial, opaqueMaterial, plantMaterial, tileUV, waterMaterial } from "./textures";
 import { ClientWorld } from "./world";
 
 interface Face {
@@ -118,6 +118,33 @@ export interface ChunkMeshes {
   opaque: THREE.Mesh | null;
   glow: THREE.Mesh | null;
   transparent: THREE.Mesh | null;
+  plants: THREE.Mesh | null;
+}
+
+/** Two crossed quads for plant blocks (tall grass, flowers, dead bushes). */
+function pushCross(buf: Buffers, wx: number, y: number, wz: number, tile: number): void {
+  const [u0, v0, u1, v1] = tileUV(tile);
+  const quads: [number, number][][] = [
+    [[0, 0], [1, 1]], // diagonal A (x0,z0)->(x1,z1)
+    [[1, 0], [0, 1]], // diagonal B (x1,z0)->(x0,z1)
+  ];
+  for (const [[ax, az], [bx, bz]] of quads) {
+    const start = buf.positions.length / 3;
+    const corners: [number, number, number][] = [
+      [ax, 0, az],
+      [bx, 0, bz],
+      [bx, 1, bz],
+      [ax, 1, az],
+    ];
+    const uvs: [number, number][] = [[0, 1], [1, 1], [1, 0], [0, 0]];
+    for (let i = 0; i < 4; i++) {
+      buf.positions.push(wx + corners[i][0], y + corners[i][1], wz + corners[i][2]);
+      buf.normals.push(0, 1, 0);
+      buf.uvs.push(u0 + uvs[i][0] * (u1 - u0), v0 + uvs[i][1] * (v1 - v0));
+      buf.colors.push(1, 1, 1);
+    }
+    buf.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+  }
 }
 
 function hides(self: BlockType, neighbour: BlockType): boolean {
@@ -128,11 +155,12 @@ function hides(self: BlockType, neighbour: BlockType): boolean {
 
 export function buildChunkMeshes(world: ClientWorld, cx: number, cz: number): ChunkMeshes {
   const chunk = world.getChunk(cx, cz);
-  if (!chunk) return { opaque: null, glow: null, transparent: null };
+  if (!chunk) return { opaque: null, glow: null, transparent: null, plants: null };
 
   const opaque = emptyBuffers();
   const glow = emptyBuffers();
   const transparent = emptyBuffers();
+  const plants = emptyBuffers();
   const baseX = cx * CHUNK_SIZE;
   const baseZ = cz * CHUNK_SIZE;
 
@@ -144,6 +172,10 @@ export function buildChunkMeshes(world: ClientWorld, cx: number, cz: number): Ch
         const block = world.getBlock(wx, y, wz);
         if (block === BlockType.Air) continue;
         const def = BLOCKS[block];
+        if (def.cross) {
+          pushCross(plants, wx, y, wz, tileForFace(block, "side"));
+          continue;
+        }
         const isWater = block === BlockType.Water;
         const buf = def.glow ? glow : def.transparent ? transparent : opaque;
         // Opaque blocks get ambient occlusion; glow/water stay flat.
@@ -162,5 +194,6 @@ export function buildChunkMeshes(world: ClientWorld, cx: number, cz: number): Ch
     opaque: opaque.positions.length ? new THREE.Mesh(geometryFrom(opaque, true), opaqueMaterial) : null,
     glow: glow.positions.length ? new THREE.Mesh(geometryFrom(glow, false), glowMaterial) : null,
     transparent: transparent.positions.length ? new THREE.Mesh(geometryFrom(transparent, false), waterMaterial) : null,
+    plants: plants.positions.length ? new THREE.Mesh(geometryFrom(plants, false), plantMaterial) : null,
   };
 }

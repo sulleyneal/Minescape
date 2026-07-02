@@ -24,6 +24,11 @@ export enum BlockType {
   Crystal = 15,
   // Biome surfaces:
   Snow = 16,
+  // Decorations:
+  TallGrass = 17,
+  Flower = 18,
+  DeadBush = 19,
+  Cactus = 20,
 }
 
 export interface BlockDef {
@@ -43,6 +48,8 @@ export interface BlockDef {
   requiresTool: boolean;
   /** Renderer hint: block emits a magical glow (crystals, runes). */
   glow?: boolean;
+  /** Renderer hint: draw as two crossed quads (plants) instead of a cube. */
+  cross?: boolean;
 }
 
 export const BLOCKS: Record<BlockType, BlockDef> = {
@@ -63,6 +70,10 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
   [BlockType.Runestone]: { id: BlockType.Runestone, name: "Runestone", color: [0.26, 0.24, 0.4], solid: true, transparent: false, drops: "rune_shard", hardness: 3.2, tool: "pickaxe", requiresTool: true, glow: true },
   [BlockType.Crystal]: { id: BlockType.Crystal, name: "Aether Crystal", color: [0.55, 0.85, 0.95], solid: true, transparent: false, drops: "crystal", hardness: 2.8, tool: "pickaxe", requiresTool: true, glow: true },
   [BlockType.Snow]: { id: BlockType.Snow, name: "Snow", color: [0.92, 0.95, 1.0], solid: true, transparent: false, drops: "dirt", hardness: 0.5, tool: "shovel", requiresTool: false },
+  [BlockType.TallGrass]: { id: BlockType.TallGrass, name: "Tall Grass", color: [0.42, 0.65, 0.32], solid: false, transparent: true, hardness: 0.05, tool: "hand", requiresTool: false, cross: true },
+  [BlockType.Flower]: { id: BlockType.Flower, name: "Aether Bloom", color: [0.65, 0.45, 0.9], solid: false, transparent: true, drops: "flower", hardness: 0.05, tool: "hand", requiresTool: false, cross: true },
+  [BlockType.DeadBush]: { id: BlockType.DeadBush, name: "Dead Bush", color: [0.55, 0.4, 0.25], solid: false, transparent: true, drops: "stick", hardness: 0.05, tool: "hand", requiresTool: false, cross: true },
+  [BlockType.Cactus]: { id: BlockType.Cactus, name: "Cactus", color: [0.3, 0.55, 0.28], solid: true, transparent: false, drops: "cactus", hardness: 0.7, tool: "hand", requiresTool: false },
 };
 
 export function isSolid(id: BlockType): boolean {

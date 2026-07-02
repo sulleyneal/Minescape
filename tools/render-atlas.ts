@@ -6,7 +6,7 @@
 
 import { createCanvas } from "canvas";
 import { writeFileSync } from "node:fs";
-import { drawTile, TILE, TILE_INDEX } from "../client/src/atlasDraw";
+import { drawTile, NUM_TILES, TILE, TILE_INDEX } from "../client/src/atlasDraw";
 
 const NAMES: Record<number, string> = {
   [TILE_INDEX.grassTop]: "Grass top",
@@ -26,6 +26,12 @@ const NAMES: Record<number, string> = {
   [TILE_INDEX.moss]: "Mossy stone",
   [TILE_INDEX.rune]: "Runestone",
   [TILE_INDEX.crystal]: "Aether crystal",
+  [TILE_INDEX.snow]: "Snow",
+  [TILE_INDEX.tallGrass]: "Tall grass",
+  [TILE_INDEX.flower]: "Aether bloom",
+  [TILE_INDEX.deadBush]: "Dead bush",
+  [TILE_INDEX.cactusSide]: "Cactus side",
+  [TILE_INDEX.cactusTop]: "Cactus top",
 };
 
 // First draw the raw atlas with the real game code, then sample tiles from it
@@ -34,13 +40,13 @@ const atlasCols = 6;
 const atlasRows = 4;
 const atlas = createCanvas(atlasCols * TILE, atlasRows * TILE);
 const actx = atlas.getContext("2d") as unknown as CanvasRenderingContext2D;
-for (let i = 0; i <= TILE_INDEX.crystal; i++) drawTile(actx, i);
+for (let i = 0; i < NUM_TILES; i++) drawTile(actx, i);
 
 const SCALE = 64;
 const PAD = 16;
 const LABEL = 22;
 const cols = 6;
-const count = TILE_INDEX.crystal + 1;
+const count = NUM_TILES;
 const rows = Math.ceil(count / cols);
 const W = cols * (SCALE + PAD) + PAD;
 const H = rows * (SCALE + PAD + LABEL) + PAD;

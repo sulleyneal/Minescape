@@ -137,6 +137,24 @@ export class World {
             this.placeTree(data, lx, height + 1, lz);
           }
         }
+
+        // Ground decorations: grass/flowers on plains & forest, brush/cacti in deserts.
+        if (height > SEA_LEVEL && height + 1 < WORLD_HEIGHT && data[idx(lx, height + 1, lz)] === BlockType.Air) {
+          const r2 = fbm(this.seed + 77, wx * 2.1, wz * 2.1, 2);
+          if (top === BlockType.Grass && (biome === Biome.Plains || biome === Biome.Forest)) {
+            if (r2 > 0.92) data[idx(lx, height + 1, lz)] = BlockType.Flower;
+            else if (r2 > 0.72) data[idx(lx, height + 1, lz)] = BlockType.TallGrass;
+          } else if (top === BlockType.Sand && biome === Biome.Desert) {
+            if (r2 > 0.88) {
+              const h = r2 > 0.93 ? 3 : 2;
+              for (let k = 1; k <= h && height + k < WORLD_HEIGHT; k++) {
+                if (data[idx(lx, height + k, lz)] === BlockType.Air) data[idx(lx, height + k, lz)] = BlockType.Cactus;
+              }
+            } else if (r2 > 0.82) {
+              data[idx(lx, height + 1, lz)] = BlockType.DeadBush;
+            }
+          }
+        }
       }
     }
     return data;

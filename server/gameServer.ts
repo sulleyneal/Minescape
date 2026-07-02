@@ -5,8 +5,8 @@
 import { WebSocket } from "ws";
 import { sanitizeSkin } from "../shared/appearance";
 import { BlockType, BLOCKS } from "../shared/blocks";
-import { CHUNK_SIZE, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
-import { MonsterDef, NPCS, QUESTS, questByGiver, SHOP } from "../shared/entities";
+import { CHUNK_SIZE, DAY_TICKS, MAX_PLAYERS, TICK_MS, VIEW_RADIUS } from "../shared/constants";
+import { MonsterDef, nextQuestFor, NPCS, QuestDef, QUESTS, SHOP } from "../shared/entities";
 import { emptyEquipment, Equipment, equipmentBonuses, EQUIP_SLOTS, EquipSlot, gearFromEquipment } from "../shared/equipment";
 import { GRID_SIZE, matchGrid } from "../shared/crafting";
 import { nodeForBlock, recipeById } from "../shared/gathering";
@@ -98,9 +98,16 @@ export class GameServer {
     this.entities = spawnWorldEntities(this.world, MONSTER_COUNT);
     setInterval(() => this.onTick(), TICK_MS);
     setInterval(() => this.saveNow(), AUTOSAVE_MS);
+    const byType = new Map<string, number>();
+    for (const m of this.entities.monsters.values()) byType.set(m.def.id, (byType.get(m.def.id) ?? 0) + 1);
     console.log(
-      `[minescape] world ready (seed ${this.world.seed}); ${this.entities.monsters.size} monsters, ${this.entities.npcs.size} NPCs; ${this.accounts.size} saved characters`,
+      `[minescape] world ready (seed ${this.world.seed}); monsters: ${[...byType].map(([k, v]) => `${k}x${v}`).join(" ")}; ${this.entities.npcs.size} NPCs; ${this.accounts.size} saved characters`,
     );
+  }
+
+  /** World clock, 0..1 (0 dawn, 0.25 noon). Starts mid-morning. */
+  private timeOfDay(): number {
+    return ((this.tick % DAY_TICKS) / DAY_TICKS + 0.15) % 1;
   }
 
   get playerCount(): number {
@@ -297,6 +304,7 @@ export class GameServer {
       maxHp: maxHitpoints(player.skills),
       equipment: player.equipment,
       bonuses: equipmentBonuses(player.equipment),
+      time: this.timeOfDay(),
     });
     this.streamChunks(player);
     this.sendEntities(player);
@@ -608,38 +616,38 @@ export class GameServer {
   }
 
   private sendQuestDialogue(player: Player, npc: NpcEntity): void {
-    const quest = questByGiver("quest");
-    if (!quest) return;
-    if (player.questDone.has(quest.id)) {
+    // An active quest takes priority; otherwise offer the next in the chain.
+    const active = QUESTS.find((q) => player.questActive.has(q.id));
+    if (active) {
+      const progress = player.questProgress[active.id] ?? 0;
+      if (progress >= active.killCount) {
+        this.completeQuest(player, npc, active);
+      } else {
+        const remaining = active.killCount - progress;
+        this.send(player, {
+          t: "dialogue", npc: npc.id, name: npc.def.name,
+          text: active.progressText.replace("{n}", String(remaining)),
+          options: [{ id: "bye", label: "I'm on it" }],
+        });
+      }
+      return;
+    }
+    const next = nextQuestFor("quest", player.questDone);
+    if (!next) {
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "Thanks again, hero. The plains are safer because of you.",
+        text: "You've done all I could ask and more, slayer of the Runebound. The realm is in your debt.",
         options: [{ id: "bye", label: "Farewell" }],
       });
       return;
     }
-    if (!player.questActive.has(quest.id)) {
-      this.send(player, {
-        t: "dialogue", npc: npc.id, name: npc.def.name, text: quest.offerText,
-        options: [{ id: "accept", label: "I'll do it" }, { id: "decline", label: "Not now" }],
-      });
-      return;
-    }
-    const progress = player.questProgress[quest.id] ?? 0;
-    if (progress >= quest.killCount) {
-      this.completeQuest(player, npc);
-    } else {
-      const remaining = quest.killCount - progress;
-      this.send(player, {
-        t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: quest.progressText.replace("{n}", String(remaining)),
-        options: [{ id: "bye", label: "I'm on it" }],
-      });
-    }
+    this.send(player, {
+      t: "dialogue", npc: npc.id, name: npc.def.name, text: next.offerText,
+      options: [{ id: "accept", label: "I'll do it" }, { id: "decline", label: "Not now" }],
+    });
   }
 
-  private completeQuest(player: Player, npc: NpcEntity): void {
-    const quest = questByGiver("quest")!;
+  private completeQuest(player: Player, npc: NpcEntity, quest: QuestDef): void {
     player.questActive.delete(quest.id);
     player.questDone.add(quest.id);
     addItem(player.inventory, "coins", quest.rewardCoins);
@@ -686,13 +694,14 @@ export class GameServer {
       this.send(player, { t: "closeUi", ui: "dialogue" });
       this.send(player, { t: "shop", name: SHOP.name, entries: SHOP.entries.map((e) => ({ item: e.item, price: e.price })) });
     } else if (option === "accept" && npc.def.role === "quest") {
-      const quest = questByGiver("quest")!;
+      const quest = nextQuestFor("quest", player.questDone);
+      if (!quest || player.questActive.has(quest.id)) return;
       player.questActive.add(quest.id);
       player.questProgress[quest.id] = 0;
       this.send(player, { t: "quest", id: quest.id, name: quest.name, status: "active", progress: 0, goal: quest.killCount });
       this.send(player, {
         t: "dialogue", npc: npc.id, name: npc.def.name,
-        text: "Good hunting. The goblins lurk in the plains and forests.",
+        text: "Good hunting. Come back when the deed is done.",
         options: [{ id: "bye", label: "I won't fail" }],
       });
     }
@@ -900,6 +909,9 @@ export class GameServer {
     if (this.tick % SNAPSHOT_EVERY === 0) {
       for (const player of this.players.values()) this.sendEntities(player);
     }
+
+    // Keep clients' day/night clocks in sync.
+    if (this.tick % 10 === 0) this.broadcast({ t: "time", time: this.timeOfDay() });
   }
 
   private tickGathering(): void {
