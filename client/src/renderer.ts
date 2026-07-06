@@ -116,20 +116,23 @@ export class Renderer {
 
     this.scene.background = SKY_HORIZON_DAY.clone();
     this.scene.fog = new THREE.Fog(SKY_HORIZON_DAY.clone(), 48, 150);
-    this.scene.add(this.makeSky());
 
     // Lighting: sky/ground hemisphere + a sun + gentle ambient, all modulated
     // by the time of day. Tuned so shaded faces stay readable, never murky.
+    // Must exist BEFORE makeSky(): it calls updateDayNight(), which sets their
+    // intensities.
     this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6a6070, 0.85);
     this.amb = new THREE.AmbientLight(0xa99fce, 0.5);
     this.sunLight = new THREE.DirectionalLight(0xfff0d0, 0.7);
     this.sunLight.position.set(0.5, 1, 0.3);
     this.scene.add(this.hemi, this.amb, this.sunLight);
+    this.scene.add(this.makeSky());
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.scene.add(this.camera); // so camera-attached children (viewmodel) render
-    this.heldGroup.position.set(0.38, -0.34, -0.6);
-    this.heldGroup.rotation.set(-0.2, 0.25, 0.05);
+    this.heldGroup.position.set(0.34, -0.3, -0.55);
+    this.heldGroup.rotation.set(-0.5, 0.45, 0.1);
+    this.heldGroup.scale.setScalar(0.55); // tool-sized, not telephone-pole-sized
     this.camera.add(this.heldGroup);
 
     // Block selection wireframe.
@@ -697,11 +700,11 @@ export class Renderer {
     const swing = Math.sin(this.swingT * Math.PI); // 0→1→0 arc
 
     this.heldGroup.position.set(
-      0.38 + Math.sin(this.bobPhase) * 0.015,
-      -0.34 + Math.abs(Math.cos(this.bobPhase)) * 0.02 - swing * 0.06,
-      -0.6 - swing * 0.08,
+      0.34 + Math.sin(this.bobPhase) * 0.015,
+      -0.3 + Math.abs(Math.cos(this.bobPhase)) * 0.02 - swing * 0.06,
+      -0.55 - swing * 0.08,
     );
-    this.heldGroup.rotation.set(-0.2 - swing * 1.1, 0.25 + swing * 0.25, 0.05);
+    this.heldGroup.rotation.set(-0.5 - swing * 1.1, 0.45 + swing * 0.25, 0.1);
   }
 
   // ---- Per-frame animation ----

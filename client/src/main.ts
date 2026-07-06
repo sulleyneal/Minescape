@@ -75,6 +75,15 @@ buildSwatches(document.getElementById("skin-head") as HTMLElement, HEAD_TONES, "
 // After a rejected login we reload on the next attempt to avoid stacking games.
 let needsReload = false;
 
+// Surface unexpected crashes instead of a silent blank screen.
+function showFatal(message: string): void {
+  overlay.classList.remove("hidden");
+  errorEl.textContent = `Something broke: ${message}`;
+  needsReload = true;
+}
+window.addEventListener("error", (e) => showFatal(e.message));
+window.addEventListener("unhandledrejection", (e) => showFatal(String(e.reason?.message ?? e.reason)));
+
 async function boot(): Promise<void> {
   if (needsReload) {
     location.reload();
@@ -87,8 +96,8 @@ async function boot(): Promise<void> {
   overlay.classList.add("hidden");
   await tryLandscape(); // user gesture — required for fullscreen/orientation APIs
   checkOrientation();
-  const game = new Game(canvas, hudRoot, name, password, { ...skin });
   try {
+    const game = new Game(canvas, hudRoot, name, password, { ...skin });
     await game.start();
   } catch (err) {
     overlay.classList.remove("hidden");
